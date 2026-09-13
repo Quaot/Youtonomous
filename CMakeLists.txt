@@ -7,8 +7,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra)
 add_compile_definitions(UNICODE _UNICODE)
 
+add_library(core STATIC
+    src/timecode.cpp
+)
+target_include_directories(core PUBLIC src)
+
 add_executable(youtonomous WIN32
     src/main.cpp
     src/window.cpp
 )
+target_link_libraries(youtonomous PRIVATE core)
 target_link_options(youtonomous PRIVATE -municode)
+
+enable_testing()
+add_executable(tests tests/tests.cpp)
+target_link_libraries(tests PRIVATE core)
+add_test(NAME tests COMMAND tests)
