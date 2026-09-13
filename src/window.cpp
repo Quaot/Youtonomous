@@ -1,7 +1,10 @@
 #include "window.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <memory>
 
+#include <commctrl.h>
 #include <commdlg.h>
 
 #include "seekbar.h"
@@ -12,6 +15,10 @@ namespace {
 
 enum ControlId {
     kOpen = 100,
+    kRemove,
+    kUrl,
+    kDownload,
+    kLibrary,
     kBack30,
     kBack10,
     kPlay,
@@ -25,22 +32,54 @@ const int kPad = 8;
 const int kGap = 4;
 const int kSide = 270;
 const int kRow = 26;
+const int kLabel = 20;
 const int kButton = 56;
 const int kSeekHeight = 20;
 
+std::filesystem::path folderFromEnv(const wchar_t* name)
+{
+    const wchar_t* value = _wgetenv(name);
+    return value ? std::filesystem::path(value) : std::filesystem::current_path();
+}
+
+std::wstring textOf(HWND control)
+{
+    int length = GetWindowTextLengthW(control);
+    std::wstring text(length + 1, L'\0');
+    GetWindowTextW(control, text.data(), length + 1);
+    text.resize(length);
+    return text;
+}
+
 void setText(HWND control, const std::wstring& text)
 {
-    wchar_t current[256];
-    GetWindowTextW(control, current, 256);
-    if (text != current)
+    if (textOf(control) != text)
         SetWindowTextW(control, text.c_str());
 }
 
+std::string trim(const std::string& text)
+{
+    size_t first = text.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return "";
+    size_t last = text.find_last_not_of(" \t\r\n");
+    return text.substr(first, last - first + 1);
+}
+
+}
+
+MainWindow::MainWindow()
+    : videosFolder_(folderFromEnv(L"USERPROFILE") / L"Videos" / L"Youtonomous")
+    , library_(folderFromEnv(L"APPDATA") / L"Youtonomous" / L"library.json")
+{
 }
 
 bool MainWindow::create(HINSTANCE instance, int show)
 {
     instance_ = instance;
+
+    INITCOMMONCONTROLSEX controls{sizeof controls, ICC_PROGRESS_CLASS};
+    InitCommonControlsEx(&controls);
 
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof wc;
@@ -80,6 +119,8 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg) {
     case WM_CREATE:
         createControls();
+        library_.load();
+        refreshLibrary();
         SetTimer(hwnd_, kTimer, 250, nullptr);
         if (!player_.ready())
             MessageBoxW(hwnd_, L"Could not start VLC.", L"Youtonomous", MB_ICONERROR);
@@ -88,7 +129,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
         layout(LOWORD(lParam), HIWORD(lParam));
         return 0;
     case WM_COMMAND:
-        onCommand(LOWORD(wParam));
+        onCommand(LOWORD(wParam), HIWORD(wParam));
         return 0;
     case WM_TIMER:
         tick();
@@ -96,6 +137,13 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_SEEKBAR_SEEK:
         player_.seek(static_cast<int>(wParam));
         tick();
+        return 0;
+    case WM_DOWNLOAD_PROGRESS:
+        SendMessageW(progress_, PBM_SETPOS, wParam, 0);
+        setText(status_, L"Downloading " + std::to_wstring(wParam) + L"%");
+        return 0;
+    case WM_DOWNLOAD_DONE:
+        onDownloadDone(reinterpret_cast<DownloadResult*>(lParam));
         return 0;
     case WM_DESTROY:
         KillTimer(hwnd_, kTimer);
@@ -106,9 +154,9 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
     return DefWindowProcW(hwnd_, msg, wParam, lParam);
 }
 
-HWND MainWindow::addControl(const wchar_t* type, const wchar_t* text, DWORD style, int id)
+HWND MainWindow::addControl(const wchar_t* type, const wchar_t* text, DWORD style, int id, DWORD exStyle)
 {
-    HWND control = CreateWindowExW(0, type, text, WS_CHILD | WS_VISIBLE | style,
+    HWND control = CreateWindowExW(exStyle, type, text, WS_CHILD | WS_VISIBLE | style,
                                    0, 0, 0, 0, hwnd_,
                                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance_, nullptr);
     SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(font_), TRUE);
@@ -122,10 +170,17 @@ void MainWindow::createControls()
     SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof metrics, &metrics, 0);
     font_ = CreateFontIndirectW(&metrics.lfMessageFont);
 
+    urlEdit_ = addControl(L"EDIT", L"", ES_AUTOHSCROLL, kUrl, WS_EX_CLIENTEDGE);
+    downloadButton_ = addControl(L"BUTTON", L"Download", BS_PUSHBUTTON, kDownload);
+    progress_ = addControl(PROGRESS_CLASSW, L"", 0, 0);
+    status_ = addControl(L"STATIC", L"Paste a YouTube link above.", SS_LEFT, 0);
+    libraryLabel_ = addControl(L"STATIC", L"Library", SS_LEFT, 0);
+    libraryList_ = addControl(L"LISTBOX", L"", WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT, kLibrary, WS_EX_CLIENTEDGE);
     openButton_ = addControl(L"BUTTON", L"Open file...", BS_PUSHBUTTON, kOpen);
+    removeButton_ = addControl(L"BUTTON", L"Remove", BS_PUSHBUTTON, kRemove);
+
     video_ = addControl(L"STATIC", L"", SS_BLACKRECT, 0);
     seekbar_ = seekbar::create(hwnd_, instance_);
-
     back30_ = addControl(L"BUTTON", L"-30", BS_PUSHBUTTON, kBack30);
     back10_ = addControl(L"BUTTON", L"-10", BS_PUSHBUTTON, kBack10);
     playButton_ = addControl(L"BUTTON", L"Play", BS_PUSHBUTTON, kPlay);
@@ -133,17 +188,33 @@ void MainWindow::createControls()
     forward30_ = addControl(L"BUTTON", L"+30", BS_PUSHBUTTON, kForward30);
     timeLabel_ = addControl(L"STATIC", L"0:00 / 0:00", SS_CENTERIMAGE, 0);
 
+    SendMessageW(progress_, PBM_SETRANGE32, 0, 100);
     player_.attach(video_);
 }
 
 void MainWindow::layout(int width, int height)
 {
+    int controlsY = height - kPad - kRow;
+    int half = (kSide - kGap) / 2;
+
+    int y = kPad;
+    MoveWindow(urlEdit_, kPad, y, kSide - 80 - kGap, kRow, TRUE);
+    MoveWindow(downloadButton_, kPad + kSide - 80, y, 80, kRow, TRUE);
+    y += kRow + kGap;
+    MoveWindow(progress_, kPad, y, kSide, 14, TRUE);
+    y += 14 + kGap;
+    MoveWindow(status_, kPad, y, kSide, kLabel * 2, TRUE);
+    y += kLabel * 2 + kPad;
+    MoveWindow(libraryLabel_, kPad, y, kSide, kLabel, TRUE);
+    y += kLabel;
+    MoveWindow(libraryList_, kPad, y, kSide, std::max(0, controlsY - kGap - y), TRUE);
+    MoveWindow(openButton_, kPad, controlsY, half, kRow, TRUE);
+    MoveWindow(removeButton_, kPad + half + kGap, controlsY, half, kRow, TRUE);
+
     int centerX = kSide + kPad * 2;
     int centerWidth = std::max(0, width - kSide * 2 - kPad * 4);
-    int controlsY = height - kPad - kRow;
     int seekY = controlsY - kPad - kSeekHeight;
 
-    MoveWindow(openButton_, kPad, controlsY, kSide, kRow, TRUE);
     MoveWindow(video_, centerX, kPad, centerWidth, std::max(0, seekY - kPad * 2), TRUE);
     MoveWindow(seekbar_, centerX, seekY, centerWidth, kSeekHeight, TRUE);
 
@@ -155,15 +226,24 @@ void MainWindow::layout(int width, int height)
     MoveWindow(timeLabel_, x + kPad, controlsY, 160, kRow, TRUE);
 }
 
-void MainWindow::onCommand(int id)
+void MainWindow::onCommand(int id, int code)
 {
     switch (id) {
     case kOpen: openFile(); break;
+    case kRemove: removeSelected(); break;
+    case kDownload: download(); break;
     case kBack30: player_.skip(-30); break;
     case kBack10: player_.skip(-10); break;
     case kPlay: player_.togglePause(); break;
     case kForward10: player_.skip(10); break;
     case kForward30: player_.skip(30); break;
+    case kLibrary:
+        if (code == LBN_DBLCLK) {
+            int index = static_cast<int>(SendMessageW(libraryList_, LB_GETCURSEL, 0, 0));
+            if (index >= 0 && index < static_cast<int>(library_.videos().size()))
+                openVideo(library_.videos()[index].id);
+        }
+        break;
     }
     tick();
 }
@@ -197,5 +277,115 @@ void MainWindow::openFile()
 
 void MainWindow::openPath(const std::wstring& path)
 {
-    player_.open(narrow(path), 0);
+    std::string file = narrow(path);
+    if (!library_.find(file)) {
+        Video video;
+        video.id = file;
+        video.title = narrow(std::filesystem::path(path).stem().wstring());
+        video.file = file;
+        library_.add(video);
+        library_.save();
+        refreshLibrary();
+    }
+    openVideo(file);
+}
+
+void MainWindow::download()
+{
+    std::string url = trim(narrow(textOf(urlEdit_)));
+    if (url.empty() || downloading_)
+        return;
+
+    if (url.find('"') != std::string::npos) {
+        setText(status_, L"That link has a quote mark in it.");
+        return;
+    }
+
+    if (Video* existing = library_.findByUrl(url)) {
+        setText(status_, L"Already in the library.");
+        openVideo(existing->id);
+        return;
+    }
+
+    downloading_ = true;
+    EnableWindow(downloadButton_, FALSE);
+    SendMessageW(progress_, PBM_SETPOS, 0, 0);
+    setText(status_, L"Starting...");
+    startDownload(hwnd_, url, videosFolder_);
+}
+
+void MainWindow::onDownloadDone(DownloadResult* raw)
+{
+    std::unique_ptr<DownloadResult> result(raw);
+    downloading_ = false;
+    EnableWindow(downloadButton_, TRUE);
+
+    if (!result->ok) {
+        SendMessageW(progress_, PBM_SETPOS, 0, 0);
+        setText(status_, widen(result->error));
+        return;
+    }
+
+    Video& downloaded = result->video;
+    std::string id = downloaded.id;
+
+    if (Video* existing = library_.find(id)) {
+        existing->url = downloaded.url;
+        existing->file = downloaded.file;
+        existing->duration = downloaded.duration;
+        Library::importChapters(*existing, downloaded.marks);
+    } else {
+        library_.add(downloaded);
+    }
+    library_.save();
+    refreshLibrary();
+
+    SendMessageW(progress_, PBM_SETPOS, 100, 0);
+    setText(status_, L"Done: " + widen(downloaded.title));
+    SetWindowTextW(urlEdit_, L"");
+    openVideo(id);
+}
+
+void MainWindow::refreshLibrary()
+{
+    SendMessageW(libraryList_, LB_RESETCONTENT, 0, 0);
+    for (const Video& video : library_.videos())
+        SendMessageW(libraryList_, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(widen(video.title).c_str()));
+}
+
+void MainWindow::openVideo(const std::string& id)
+{
+    const auto& videos = library_.videos();
+    auto found = std::find_if(videos.begin(), videos.end(), [&](const Video& video) { return video.id == id; });
+    if (found == videos.end())
+        return;
+
+    std::error_code error;
+    if (!std::filesystem::exists(std::filesystem::u8path(found->file), error)) {
+        std::wstring message = L"File not found:\n" + widen(found->file);
+        MessageBoxW(hwnd_, message.c_str(), L"Youtonomous", MB_ICONWARNING);
+        return;
+    }
+
+    currentId_ = id;
+    player_.open(found->file, found->start);
+    SendMessageW(libraryList_, LB_SETCURSEL, found - videos.begin(), 0);
+    SetWindowTextW(hwnd_, (L"Youtonomous - " + widen(found->title)).c_str());
+}
+
+void MainWindow::removeSelected()
+{
+    int index = static_cast<int>(SendMessageW(libraryList_, LB_GETCURSEL, 0, 0));
+    if (index < 0 || index >= static_cast<int>(library_.videos().size()))
+        return;
+
+    const Video& video = library_.videos()[index];
+    std::wstring question = L"Remove \"" + widen(video.title) + L"\" from the library?\nThe file stays on disk.";
+    if (MessageBoxW(hwnd_, question.c_str(), L"Youtonomous", MB_YESNO | MB_ICONQUESTION) != IDYES)
+        return;
+
+    std::string id = video.id;
+    library_.remove(id);
+    library_.save();
+    refreshLibrary();
 }
