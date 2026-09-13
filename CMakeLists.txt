@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Youtonomous CXX)
+project(Youtonomous CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,8 +19,10 @@ target_link_libraries(core PUBLIC nlohmann_json::nlohmann_json)
 add_executable(youtonomous WIN32
     src/main.cpp
     src/window.cpp
+    src/player.cpp
+    src/app.rc
 )
-target_link_libraries(youtonomous PRIVATE core)
+target_link_libraries(youtonomous PRIVATE core vlc comdlg32)
 target_link_options(youtonomous PRIVATE -municode)
 
 enable_testing()
