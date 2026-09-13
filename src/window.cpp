@@ -26,6 +26,9 @@ enum ControlId {
     kForward10,
     kForward30,
     kNextMark,
+    kStart,
+    kSetStart,
+    kGoStart,
     kMarks,
     kMarkLabel,
     kAddMark,
@@ -205,6 +208,11 @@ void MainWindow::createControls()
     nextMark_ = addControl(L"BUTTON", L"Next", BS_PUSHBUTTON, kNextMark);
     timeLabel_ = addControl(L"STATIC", L"0:00 / 0:00", SS_CENTERIMAGE, 0);
 
+    startLabel_ = addControl(L"STATIC", L"Start at", SS_LEFT, 0);
+    startEdit_ = addControl(L"EDIT", L"", ES_AUTOHSCROLL, kStart, WS_EX_CLIENTEDGE);
+    setStartButton_ = addControl(L"BUTTON", L"Set", BS_PUSHBUTTON, kSetStart);
+    goStartButton_ = addControl(L"BUTTON", L"Go", BS_PUSHBUTTON, kGoStart);
+
     marksLabel_ = addControl(L"STATIC", L"Bookmarks", SS_LEFT, 0);
     marksList_ = addControl(L"LISTBOX", L"", listStyle, kMarks, WS_EX_CLIENTEDGE);
     markLabelEdit_ = addControl(L"EDIT", L"", ES_AUTOHSCROLL, kMarkLabel, WS_EX_CLIENTEDGE);
@@ -212,6 +220,7 @@ void MainWindow::createControls()
     deleteMarkButton_ = addControl(L"BUTTON", L"Delete", BS_PUSHBUTTON, kDeleteMark);
 
     SendMessageW(progress_, PBM_SETRANGE32, 0, 100);
+    SendMessageW(startEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"0:00"));
     SendMessageW(markLabelEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Label (optional)"));
     player_.attach(video_);
 }
@@ -253,6 +262,12 @@ void MainWindow::layout(int width, int height)
     int labelRowY = controlsY - kGap - kRow;
 
     y = kPad;
+    MoveWindow(startLabel_, rightX, y, kSide, kLabel, TRUE);
+    y += kLabel;
+    MoveWindow(startEdit_, rightX, y, kSide - kButton * 2 - kGap * 2, kRow, TRUE);
+    MoveWindow(setStartButton_, rightX + kSide - kButton * 2 - kGap, y, kButton, kRow, TRUE);
+    MoveWindow(goStartButton_, rightX + kSide - kButton, y, kButton, kRow, TRUE);
+    y += kRow + kPad;
     MoveWindow(marksLabel_, rightX, y, kSide, kLabel, TRUE);
     y += kLabel;
     MoveWindow(marksList_, rightX, y, kSide, std::max(0, labelRowY - kGap - y), TRUE);
@@ -274,6 +289,8 @@ void MainWindow::onCommand(int id, int code)
     case kForward10: player_.skip(10); break;
     case kForward30: player_.skip(30); break;
     case kNextMark: jumpMark(1); break;
+    case kSetStart: saveStartFromBox(); break;
+    case kGoStart: goToStart(); break;
     case kAddMark: addMark(); break;
     case kDeleteMark: deleteSelectedMark(); break;
     case kLibrary:
@@ -452,6 +469,7 @@ void MainWindow::refreshMarks()
     Video* video = current();
     if (!video) {
         seekbar::setMarks(seekbar_, {}, 0);
+        setText(startEdit_, L"");
         return;
     }
 
@@ -460,6 +478,7 @@ void MainWindow::refreshMarks()
         SendMessageW(marksList_, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(line.c_str()));
     }
     seekbar::setMarks(seekbar_, video->marks, video->start);
+    setText(startEdit_, widen(timecode::format(video->start)));
 }
 
 void MainWindow::addMark()
@@ -526,4 +545,40 @@ void MainWindow::jumpMark(int direction)
                                  [&](const Bookmark& mark) { return mark.time < now - 2; });
     if (previous != marks.rend())
         player_.seek(previous->time);
+}
+
+void MainWindow::saveStartFromBox()
+{
+    Video* video = current();
+    if (!video)
+        return;
+
+    std::optional<int> start = timecode::parse(narrow(textOf(startEdit_)));
+    if (!start) {
+        MessageBeep(MB_ICONWARNING);
+        setText(startEdit_, widen(timecode::format(video->start)));
+        return;
+    }
+    setStart(*start);
+}
+
+void MainWindow::setStart(int seconds)
+{
+    Video* video = current();
+    if (!video)
+        return;
+
+    int length = player_.length();
+    if (length > 0)
+        seconds = std::min(seconds, length - 1);
+
+    video->start = std::max(seconds, 0);
+    library_.save();
+    refreshMarks();
+}
+
+void MainWindow::goToStart()
+{
+    if (Video* video = current())
+        player_.seek(video->start);
 }

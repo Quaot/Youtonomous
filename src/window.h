@@ -40,6 +40,10 @@ private:
     void jumpToSelectedMark();
     void jumpMark(int direction);
 
+    void saveStartFromBox();
+    void setStart(int seconds);
+    void goToStart();
+
     HWND hwnd_ = nullptr;
     HINSTANCE instance_ = nullptr;
     HFONT font_ = nullptr;
@@ -63,6 +67,11 @@ private:
     HWND forward30_ = nullptr;
     HWND nextMark_ = nullptr;
     HWND timeLabel_ = nullptr;
+
+    HWND startLabel_ = nullptr;
+    HWND startEdit_ = nullptr;
+    HWND setStartButton_ = nullptr;
+    HWND goStartButton_ = nullptr;
 
     HWND marksLabel_ = nullptr;
     HWND marksList_ = nullptr;
