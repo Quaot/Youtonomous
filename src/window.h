@@ -33,6 +33,13 @@ private:
     void openVideo(const std::string& id);
     void removeSelected();
 
+    Video* current();
+    void refreshMarks();
+    void addMark();
+    void deleteSelectedMark();
+    void jumpToSelectedMark();
+    void jumpMark(int direction);
+
     HWND hwnd_ = nullptr;
     HINSTANCE instance_ = nullptr;
     HFONT font_ = nullptr;
@@ -48,12 +55,20 @@ private:
 
     HWND video_ = nullptr;
     HWND seekbar_ = nullptr;
+    HWND prevMark_ = nullptr;
     HWND back30_ = nullptr;
     HWND back10_ = nullptr;
     HWND playButton_ = nullptr;
     HWND forward10_ = nullptr;
     HWND forward30_ = nullptr;
+    HWND nextMark_ = nullptr;
     HWND timeLabel_ = nullptr;
+
+    HWND marksLabel_ = nullptr;
+    HWND marksList_ = nullptr;
+    HWND markLabelEdit_ = nullptr;
+    HWND addMarkButton_ = nullptr;
+    HWND deleteMarkButton_ = nullptr;
 
     std::filesystem::path videosFolder_;
     Library library_;

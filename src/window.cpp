@@ -19,11 +19,17 @@ enum ControlId {
     kUrl,
     kDownload,
     kLibrary,
+    kPrevMark,
     kBack30,
     kBack10,
     kPlay,
     kForward10,
     kForward30,
+    kNextMark,
+    kMarks,
+    kMarkLabel,
+    kAddMark,
+    kDeleteMark,
 };
 
 const UINT_PTR kTimer = 1;
@@ -34,6 +40,7 @@ const int kSide = 270;
 const int kRow = 26;
 const int kLabel = 20;
 const int kButton = 56;
+const int kSmallButton = 80;
 const int kSeekHeight = 20;
 
 std::filesystem::path folderFromEnv(const wchar_t* name)
@@ -64,6 +71,12 @@ std::string trim(const std::string& text)
         return "";
     size_t last = text.find_last_not_of(" \t\r\n");
     return text.substr(first, last - first + 1);
+}
+
+int selectedIndex(HWND list, size_t count)
+{
+    int index = static_cast<int>(SendMessageW(list, LB_GETCURSEL, 0, 0));
+    return index >= 0 && static_cast<size_t>(index) < count ? index : -1;
 }
 
 }
@@ -170,25 +183,36 @@ void MainWindow::createControls()
     SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof metrics, &metrics, 0);
     font_ = CreateFontIndirectW(&metrics.lfMessageFont);
 
+    const DWORD listStyle = WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT;
+
     urlEdit_ = addControl(L"EDIT", L"", ES_AUTOHSCROLL, kUrl, WS_EX_CLIENTEDGE);
     downloadButton_ = addControl(L"BUTTON", L"Download", BS_PUSHBUTTON, kDownload);
     progress_ = addControl(PROGRESS_CLASSW, L"", 0, 0);
     status_ = addControl(L"STATIC", L"Paste a YouTube link above.", SS_LEFT, 0);
     libraryLabel_ = addControl(L"STATIC", L"Library", SS_LEFT, 0);
-    libraryList_ = addControl(L"LISTBOX", L"", WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT, kLibrary, WS_EX_CLIENTEDGE);
+    libraryList_ = addControl(L"LISTBOX", L"", listStyle, kLibrary, WS_EX_CLIENTEDGE);
     openButton_ = addControl(L"BUTTON", L"Open file...", BS_PUSHBUTTON, kOpen);
     removeButton_ = addControl(L"BUTTON", L"Remove", BS_PUSHBUTTON, kRemove);
 
     video_ = addControl(L"STATIC", L"", SS_BLACKRECT, 0);
     seekbar_ = seekbar::create(hwnd_, instance_);
+    prevMark_ = addControl(L"BUTTON", L"Prev", BS_PUSHBUTTON, kPrevMark);
     back30_ = addControl(L"BUTTON", L"-30", BS_PUSHBUTTON, kBack30);
     back10_ = addControl(L"BUTTON", L"-10", BS_PUSHBUTTON, kBack10);
     playButton_ = addControl(L"BUTTON", L"Play", BS_PUSHBUTTON, kPlay);
     forward10_ = addControl(L"BUTTON", L"+10", BS_PUSHBUTTON, kForward10);
     forward30_ = addControl(L"BUTTON", L"+30", BS_PUSHBUTTON, kForward30);
+    nextMark_ = addControl(L"BUTTON", L"Next", BS_PUSHBUTTON, kNextMark);
     timeLabel_ = addControl(L"STATIC", L"0:00 / 0:00", SS_CENTERIMAGE, 0);
 
+    marksLabel_ = addControl(L"STATIC", L"Bookmarks", SS_LEFT, 0);
+    marksList_ = addControl(L"LISTBOX", L"", listStyle, kMarks, WS_EX_CLIENTEDGE);
+    markLabelEdit_ = addControl(L"EDIT", L"", ES_AUTOHSCROLL, kMarkLabel, WS_EX_CLIENTEDGE);
+    addMarkButton_ = addControl(L"BUTTON", L"Add", BS_PUSHBUTTON, kAddMark);
+    deleteMarkButton_ = addControl(L"BUTTON", L"Delete", BS_PUSHBUTTON, kDeleteMark);
+
     SendMessageW(progress_, PBM_SETRANGE32, 0, 100);
+    SendMessageW(markLabelEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Label (optional)"));
     player_.attach(video_);
 }
 
@@ -198,8 +222,8 @@ void MainWindow::layout(int width, int height)
     int half = (kSide - kGap) / 2;
 
     int y = kPad;
-    MoveWindow(urlEdit_, kPad, y, kSide - 80 - kGap, kRow, TRUE);
-    MoveWindow(downloadButton_, kPad + kSide - 80, y, 80, kRow, TRUE);
+    MoveWindow(urlEdit_, kPad, y, kSide - kSmallButton - kGap, kRow, TRUE);
+    MoveWindow(downloadButton_, kPad + kSide - kSmallButton, y, kSmallButton, kRow, TRUE);
     y += kRow + kGap;
     MoveWindow(progress_, kPad, y, kSide, 14, TRUE);
     y += 14 + kGap;
@@ -219,11 +243,22 @@ void MainWindow::layout(int width, int height)
     MoveWindow(seekbar_, centerX, seekY, centerWidth, kSeekHeight, TRUE);
 
     int x = centerX;
-    for (HWND button : {back30_, back10_, playButton_, forward10_, forward30_}) {
+    for (HWND button : {prevMark_, back30_, back10_, playButton_, forward10_, forward30_, nextMark_}) {
         MoveWindow(button, x, controlsY, kButton, kRow, TRUE);
         x += kButton + kGap;
     }
     MoveWindow(timeLabel_, x + kPad, controlsY, 160, kRow, TRUE);
+
+    int rightX = width - kPad - kSide;
+    int labelRowY = controlsY - kGap - kRow;
+
+    y = kPad;
+    MoveWindow(marksLabel_, rightX, y, kSide, kLabel, TRUE);
+    y += kLabel;
+    MoveWindow(marksList_, rightX, y, kSide, std::max(0, labelRowY - kGap - y), TRUE);
+    MoveWindow(markLabelEdit_, rightX, labelRowY, kSide - kSmallButton - kGap, kRow, TRUE);
+    MoveWindow(addMarkButton_, rightX + kSide - kSmallButton, labelRowY, kSmallButton, kRow, TRUE);
+    MoveWindow(deleteMarkButton_, rightX, controlsY, kSide, kRow, TRUE);
 }
 
 void MainWindow::onCommand(int id, int code)
@@ -232,17 +267,25 @@ void MainWindow::onCommand(int id, int code)
     case kOpen: openFile(); break;
     case kRemove: removeSelected(); break;
     case kDownload: download(); break;
+    case kPrevMark: jumpMark(-1); break;
     case kBack30: player_.skip(-30); break;
     case kBack10: player_.skip(-10); break;
     case kPlay: player_.togglePause(); break;
     case kForward10: player_.skip(10); break;
     case kForward30: player_.skip(30); break;
+    case kNextMark: jumpMark(1); break;
+    case kAddMark: addMark(); break;
+    case kDeleteMark: deleteSelectedMark(); break;
     case kLibrary:
         if (code == LBN_DBLCLK) {
-            int index = static_cast<int>(SendMessageW(libraryList_, LB_GETCURSEL, 0, 0));
-            if (index >= 0 && index < static_cast<int>(library_.videos().size()))
+            int index = selectedIndex(libraryList_, library_.videos().size());
+            if (index >= 0)
                 openVideo(library_.videos()[index].id);
         }
+        break;
+    case kMarks:
+        if (code == LBN_SELCHANGE)
+            jumpToSelectedMark();
         break;
     }
     tick();
@@ -277,17 +320,22 @@ void MainWindow::openFile()
 
 void MainWindow::openPath(const std::wstring& path)
 {
-    std::string file = narrow(path);
-    if (!library_.find(file)) {
-        Video video;
-        video.id = file;
-        video.title = narrow(std::filesystem::path(path).stem().wstring());
-        video.file = file;
-        library_.add(video);
-        library_.save();
-        refreshLibrary();
+    for (const Video& video : library_.videos()) {
+        std::error_code error;
+        if (std::filesystem::equivalent(std::filesystem::u8path(video.file), path, error)) {
+            openVideo(video.id);
+            return;
+        }
     }
-    openVideo(file);
+
+    Video video;
+    video.id = narrow(path);
+    video.title = narrow(std::filesystem::path(path).stem().wstring());
+    video.file = video.id;
+    library_.add(video);
+    library_.save();
+    refreshLibrary();
+    openVideo(video.id);
 }
 
 void MainWindow::download()
@@ -371,12 +419,13 @@ void MainWindow::openVideo(const std::string& id)
     player_.open(found->file, found->start);
     SendMessageW(libraryList_, LB_SETCURSEL, found - videos.begin(), 0);
     SetWindowTextW(hwnd_, (L"Youtonomous - " + widen(found->title)).c_str());
+    refreshMarks();
 }
 
 void MainWindow::removeSelected()
 {
-    int index = static_cast<int>(SendMessageW(libraryList_, LB_GETCURSEL, 0, 0));
-    if (index < 0 || index >= static_cast<int>(library_.videos().size()))
+    int index = selectedIndex(libraryList_, library_.videos().size());
+    if (index < 0)
         return;
 
     const Video& video = library_.videos()[index];
@@ -388,4 +437,93 @@ void MainWindow::removeSelected()
     library_.remove(id);
     library_.save();
     refreshLibrary();
+    refreshMarks();
+}
+
+Video* MainWindow::current()
+{
+    return currentId_.empty() ? nullptr : library_.find(currentId_);
+}
+
+void MainWindow::refreshMarks()
+{
+    SendMessageW(marksList_, LB_RESETCONTENT, 0, 0);
+
+    Video* video = current();
+    if (!video) {
+        seekbar::setMarks(seekbar_, {}, 0);
+        return;
+    }
+
+    for (const Bookmark& mark : video->marks) {
+        std::wstring line = widen(timecode::format(mark.time) + "  " + mark.label);
+        SendMessageW(marksList_, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(line.c_str()));
+    }
+    seekbar::setMarks(seekbar_, video->marks, video->start);
+}
+
+void MainWindow::addMark()
+{
+    Video* video = current();
+    if (!video || !player_.loaded())
+        return;
+
+    std::string label = trim(narrow(textOf(markLabelEdit_)));
+    if (label.empty())
+        label = "Bookmark";
+
+    Library::addMark(*video, {player_.time(), label, false});
+    library_.save();
+    SetWindowTextW(markLabelEdit_, L"");
+    refreshMarks();
+}
+
+void MainWindow::deleteSelectedMark()
+{
+    Video* video = current();
+    if (!video)
+        return;
+
+    int index = selectedIndex(marksList_, video->marks.size());
+    if (index < 0)
+        return;
+
+    video->marks.erase(video->marks.begin() + index);
+    library_.save();
+    refreshMarks();
+}
+
+void MainWindow::jumpToSelectedMark()
+{
+    Video* video = current();
+    if (!video)
+        return;
+
+    int index = selectedIndex(marksList_, video->marks.size());
+    if (index >= 0)
+        player_.seek(video->marks[index].time);
+}
+
+void MainWindow::jumpMark(int direction)
+{
+    Video* video = current();
+    if (!video)
+        return;
+
+    const auto& marks = video->marks;
+    int now = player_.time();
+
+    if (direction > 0) {
+        auto next = std::find_if(marks.begin(), marks.end(),
+                                 [&](const Bookmark& mark) { return mark.time > now; });
+        if (next != marks.end())
+            player_.seek(next->time);
+        return;
+    }
+
+    // The grace period lets repeated presses walk back past the mark just reached.
+    auto previous = std::find_if(marks.rbegin(), marks.rend(),
+                                 [&](const Bookmark& mark) { return mark.time < now - 2; });
+    if (previous != marks.rend())
+        player_.seek(previous->time);
 }

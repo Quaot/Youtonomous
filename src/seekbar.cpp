@@ -10,9 +10,17 @@ namespace {
 
 const wchar_t kClassName[] = L"YoutonomousSeekBar";
 
+const COLORREF kTrack = RGB(200, 200, 200);
+const COLORREF kPlayed = RGB(220, 40, 40);
+const COLORREF kChapter = RGB(60, 110, 200);
+const COLORREF kMark = RGB(240, 150, 0);
+const COLORREF kStart = RGB(40, 170, 80);
+
 struct State {
     int length = 0;
     int position = 0;
+    int start = 0;
+    std::vector<Bookmark> marks;
     bool dragging = false;
 };
 
@@ -50,16 +58,31 @@ void fill(HDC dc, const RECT& rect, COLORREF color)
     DeleteObject(brush);
 }
 
+void drawTick(HDC dc, int x, int height, COLORREF color)
+{
+    RECT rect{x - 1, 2, x + 2, height - 2};
+    fill(dc, rect, color);
+}
+
 void draw(HDC dc, const State& state, int width, int height)
 {
     RECT all{0, 0, width, height};
     fill(dc, all, GetSysColor(COLOR_BTNFACE));
 
     RECT track{0, height / 2 - 3, width, height / 2 + 3};
-    fill(dc, track, RGB(200, 200, 200));
+    fill(dc, track, kTrack);
 
     track.right = xFor(state, state.position, width);
-    fill(dc, track, RGB(220, 40, 40));
+    fill(dc, track, kPlayed);
+
+    if (state.length <= 0)
+        return;
+
+    for (const Bookmark& mark : state.marks)
+        drawTick(dc, xFor(state, mark.time, width), height, mark.chapter ? kChapter : kMark);
+
+    if (state.start > 0)
+        drawTick(dc, xFor(state, state.start, width), height, kStart);
 }
 
 void paint(HWND bar, const State& state)
@@ -162,6 +185,14 @@ void setPosition(HWND bar, int position)
     if (state->dragging || state->position == position)
         return;
     state->position = position;
+    InvalidateRect(bar, nullptr, FALSE);
+}
+
+void setMarks(HWND bar, const std::vector<Bookmark>& marks, int start)
+{
+    State* state = stateOf(bar);
+    state->marks = marks;
+    state->start = start;
     InvalidateRect(bar, nullptr, FALSE);
 }
 
