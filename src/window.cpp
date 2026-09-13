@@ -4,17 +4,37 @@
 
 #include <commdlg.h>
 
+#include "seekbar.h"
 #include "text.h"
+#include "timecode.h"
 
 namespace {
 
 enum ControlId {
     kOpen = 100,
+    kBack30,
+    kBack10,
+    kPlay,
+    kForward10,
+    kForward30,
 };
 
+const UINT_PTR kTimer = 1;
+
 const int kPad = 8;
+const int kGap = 4;
 const int kSide = 270;
 const int kRow = 26;
+const int kButton = 56;
+const int kSeekHeight = 20;
+
+void setText(HWND control, const std::wstring& text)
+{
+    wchar_t current[256];
+    GetWindowTextW(control, current, 256);
+    if (text != current)
+        SetWindowTextW(control, text.c_str());
+}
 
 }
 
@@ -60,6 +80,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg) {
     case WM_CREATE:
         createControls();
+        SetTimer(hwnd_, kTimer, 250, nullptr);
         if (!player_.ready())
             MessageBoxW(hwnd_, L"Could not start VLC.", L"Youtonomous", MB_ICONERROR);
         return 0;
@@ -69,7 +90,15 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND:
         onCommand(LOWORD(wParam));
         return 0;
+    case WM_TIMER:
+        tick();
+        return 0;
+    case WM_SEEKBAR_SEEK:
+        player_.seek(static_cast<int>(wParam));
+        tick();
+        return 0;
     case WM_DESTROY:
+        KillTimer(hwnd_, kTimer);
         DeleteObject(font_);
         PostQuitMessage(0);
         return 0;
@@ -95,6 +124,14 @@ void MainWindow::createControls()
 
     openButton_ = addControl(L"BUTTON", L"Open file...", BS_PUSHBUTTON, kOpen);
     video_ = addControl(L"STATIC", L"", SS_BLACKRECT, 0);
+    seekbar_ = seekbar::create(hwnd_, instance_);
+
+    back30_ = addControl(L"BUTTON", L"-30", BS_PUSHBUTTON, kBack30);
+    back10_ = addControl(L"BUTTON", L"-10", BS_PUSHBUTTON, kBack10);
+    playButton_ = addControl(L"BUTTON", L"Play", BS_PUSHBUTTON, kPlay);
+    forward10_ = addControl(L"BUTTON", L"+10", BS_PUSHBUTTON, kForward10);
+    forward30_ = addControl(L"BUTTON", L"+30", BS_PUSHBUTTON, kForward30);
+    timeLabel_ = addControl(L"STATIC", L"0:00 / 0:00", SS_CENTERIMAGE, 0);
 
     player_.attach(video_);
 }
@@ -103,18 +140,44 @@ void MainWindow::layout(int width, int height)
 {
     int centerX = kSide + kPad * 2;
     int centerWidth = std::max(0, width - kSide * 2 - kPad * 4);
+    int controlsY = height - kPad - kRow;
+    int seekY = controlsY - kPad - kSeekHeight;
 
-    MoveWindow(openButton_, kPad, height - kPad - kRow, kSide, kRow, TRUE);
-    MoveWindow(video_, centerX, kPad, centerWidth, std::max(0, height - kPad * 2), TRUE);
+    MoveWindow(openButton_, kPad, controlsY, kSide, kRow, TRUE);
+    MoveWindow(video_, centerX, kPad, centerWidth, std::max(0, seekY - kPad * 2), TRUE);
+    MoveWindow(seekbar_, centerX, seekY, centerWidth, kSeekHeight, TRUE);
+
+    int x = centerX;
+    for (HWND button : {back30_, back10_, playButton_, forward10_, forward30_}) {
+        MoveWindow(button, x, controlsY, kButton, kRow, TRUE);
+        x += kButton + kGap;
+    }
+    MoveWindow(timeLabel_, x + kPad, controlsY, 160, kRow, TRUE);
 }
 
 void MainWindow::onCommand(int id)
 {
     switch (id) {
-    case kOpen:
-        openFile();
-        break;
+    case kOpen: openFile(); break;
+    case kBack30: player_.skip(-30); break;
+    case kBack10: player_.skip(-10); break;
+    case kPlay: player_.togglePause(); break;
+    case kForward10: player_.skip(10); break;
+    case kForward30: player_.skip(30); break;
     }
+    tick();
+}
+
+void MainWindow::tick()
+{
+    int time = player_.time();
+    int length = player_.length();
+
+    seekbar::setRange(seekbar_, length);
+    seekbar::setPosition(seekbar_, time);
+
+    setText(timeLabel_, widen(timecode::format(time) + " / " + timecode::format(length)));
+    setText(playButton_, player_.playing() ? L"Pause" : L"Play");
 }
 
 void MainWindow::openFile()

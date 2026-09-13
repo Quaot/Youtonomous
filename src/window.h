@@ -19,6 +19,7 @@ private:
     void createControls();
     void layout(int width, int height);
     void onCommand(int id);
+    void tick();
 
     void openFile();
 
@@ -28,6 +29,13 @@ private:
 
     HWND openButton_ = nullptr;
     HWND video_ = nullptr;
+    HWND seekbar_ = nullptr;
+    HWND back30_ = nullptr;
+    HWND back10_ = nullptr;
+    HWND playButton_ = nullptr;
+    HWND forward10_ = nullptr;
+    HWND forward30_ = nullptr;
+    HWND timeLabel_ = nullptr;
 
     Player player_;
 };

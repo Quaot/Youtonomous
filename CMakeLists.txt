@@ -20,6 +20,7 @@ add_executable(youtonomous WIN32
     src/main.cpp
     src/window.cpp
     src/player.cpp
+    src/seekbar.cpp
     src/app.rc
 )
 target_link_libraries(youtonomous PRIVATE core vlc comdlg32)
