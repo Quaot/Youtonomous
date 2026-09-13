@@ -16,6 +16,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (window.handleKey(msg))
+            continue;
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }

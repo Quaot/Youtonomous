@@ -15,6 +15,7 @@ public:
 
     bool create(HINSTANCE instance, int show);
     void openPath(const std::wstring& path);
+    bool handleKey(const MSG& msg);
 
 private:
     static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);

@@ -154,6 +154,9 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
         player_.seek(static_cast<int>(wParam));
         tick();
         return 0;
+    case WM_LBUTTONDOWN:
+        SetFocus(hwnd_);
+        return 0;
     case WM_DOWNLOAD_PROGRESS:
         SendMessageW(progress_, PBM_SETPOS, wParam, 0);
         setText(status_, L"Downloading " + std::to_wstring(wParam) + L"%");
@@ -305,6 +308,9 @@ void MainWindow::onCommand(int id, int code)
             jumpToSelectedMark();
         break;
     }
+
+    if (code == BN_CLICKED || code == LBN_SELCHANGE || code == LBN_DBLCLK)
+        SetFocus(hwnd_);
     tick();
 }
 
@@ -581,4 +587,42 @@ void MainWindow::goToStart()
 {
     if (Video* video = current())
         player_.seek(video->start);
+}
+
+bool MainWindow::handleKey(const MSG& msg)
+{
+    if (msg.message != WM_KEYDOWN || (msg.hwnd != hwnd_ && !IsChild(hwnd_, msg.hwnd)))
+        return false;
+
+    HWND focus = GetFocus();
+    bool typing = focus == urlEdit_ || focus == startEdit_ || focus == markLabelEdit_;
+
+    if (msg.wParam == VK_RETURN && typing) {
+        if (focus == urlEdit_)
+            download();
+        else if (focus == startEdit_)
+            saveStartFromBox();
+        else
+            addMark();
+        return true;
+    }
+    if (typing)
+        return false;
+
+    bool shift = GetKeyState(VK_SHIFT) < 0;
+
+    switch (msg.wParam) {
+    case VK_SPACE: player_.togglePause(); break;
+    case VK_LEFT: player_.skip(shift ? -60 : -10); break;
+    case VK_RIGHT: player_.skip(shift ? 60 : 10); break;
+    case VK_OEM_4: jumpMark(-1); break;
+    case VK_OEM_6: jumpMark(1); break;
+    case 'B': addMark(); break;
+    case 'S': setStart(player_.time()); break;
+    case VK_HOME: goToStart(); break;
+    default: return false;
+    }
+
+    tick();
+    return true;
 }

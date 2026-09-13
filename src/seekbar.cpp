@@ -130,6 +130,7 @@ LRESULT CALLBACK proc(HWND bar, UINT msg, WPARAM wParam, LPARAM lParam)
         paint(bar, *state);
         return 0;
     case WM_LBUTTONDOWN:
+        SetFocus(GetParent(bar));
         if (state->length > 0) {
             state->dragging = true;
             SetCapture(bar);
