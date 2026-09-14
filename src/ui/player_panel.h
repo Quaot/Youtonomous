@@ -19,12 +19,12 @@ public:
 private:
     HWND video_ = nullptr;
     HWND seekbar_ = nullptr;
-    HWND prevMark_ = nullptr;
+    HWND prev_mark_ = nullptr;
     HWND back30_ = nullptr;
     HWND back10_ = nullptr;
-    HWND playButton_ = nullptr;
+    HWND play_button_ = nullptr;
     HWND forward10_ = nullptr;
     HWND forward30_ = nullptr;
-    HWND nextMark_ = nullptr;
-    HWND timeLabel_ = nullptr;
+    HWND next_mark_ = nullptr;
+    HWND time_label_ = nullptr;
 };

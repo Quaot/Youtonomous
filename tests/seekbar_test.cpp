@@ -9,21 +9,21 @@
 #include "seekbar.h"
 
 static HWND parent;
-static std::vector<long long> sentSeeks;
+static std::vector<long long> sent_seeks;
 
-static LRESULT CALLBACK parentProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+static LRESULT CALLBACK parentProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     if (msg == WM_SEEKBAR_SEEK) {
-        sentSeeks.push_back(static_cast<long long>(wParam));
+        sent_seeks.push_back(static_cast<long long>(w_param));
         return 0;
     }
-    return DefWindowProcW(hwnd, msg, wParam, lParam);
+    return DefWindowProcW(hwnd, msg, w_param, l_param);
 }
 
 static std::vector<long long> takeSeeks()
 {
-    std::vector<long long> seeks = sentSeeks;
-    sentSeeks.clear();
+    std::vector<long long> seeks = sent_seeks;
+    sent_seeks.clear();
     MSG msg;
     while (PeekMessageW(&msg, parent, WM_SEEKBAR_SEEK, WM_SEEKBAR_SEEK, PM_REMOVE))
         seeks.push_back(static_cast<long long>(msg.wParam));
@@ -301,11 +301,11 @@ static void testTwoBars(HINSTANCE instance, HWND bar)
 int main()
 {
     HINSTANCE instance = GetModuleHandleW(nullptr);
-    WNDCLASSW windowClass = {};
-    windowClass.lpfnWndProc = parentProc;
-    windowClass.hInstance = instance;
-    windowClass.lpszClassName = L"SeekbarTestParent";
-    RegisterClassW(&windowClass);
+    WNDCLASSW window_class = {};
+    window_class.lpfnWndProc = parentProc;
+    window_class.hInstance = instance;
+    window_class.lpszClassName = L"SeekbarTestParent";
+    RegisterClassW(&window_class);
     parent = CreateWindowExW(0, L"SeekbarTestParent", L"seekbar test", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                              0, 0, 1400, 200, nullptr, nullptr, instance, nullptr);
     check(parent != nullptr, "hidden parent window is created");

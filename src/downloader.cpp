@@ -11,54 +11,54 @@
 
 using nlohmann::json;
 
-static bool runProcess(std::wstring commandLine, const std::function<void(const std::string&)>& onLine)
+static bool runProcess(std::wstring command_line, const std::function<void(const std::string&)>& on_line)
 {
     SECURITY_ATTRIBUTES security{sizeof security, nullptr, TRUE};
-    HANDLE readEnd = nullptr;
-    HANDLE writeEnd = nullptr;
-    if (!CreatePipe(&readEnd, &writeEnd, &security, 0))
+    HANDLE read_end = nullptr;
+    HANDLE write_end = nullptr;
+    if (!CreatePipe(&read_end, &write_end, &security, 0))
         return false;
-    SetHandleInformation(readEnd, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(read_end, HANDLE_FLAG_INHERIT, 0);
 
     STARTUPINFOW startup{};
     startup.cb = sizeof startup;
     startup.dwFlags = STARTF_USESTDHANDLES;
-    startup.hStdOutput = writeEnd;
-    startup.hStdError = writeEnd;
+    startup.hStdOutput = write_end;
+    startup.hStdError = write_end;
 
     PROCESS_INFORMATION process{};
-    BOOL started = CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE,
+    BOOL started = CreateProcessW(nullptr, command_line.data(), nullptr, nullptr, TRUE,
                                   CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
-    CloseHandle(writeEnd);
+    CloseHandle(write_end);
     if (!started) {
-        CloseHandle(readEnd);
+        CloseHandle(read_end);
         return false;
     }
 
     std::string pending;
     char buffer[4096];
     DWORD count = 0;
-    while (ReadFile(readEnd, buffer, sizeof buffer, &count, nullptr) && count > 0) {
+    while (ReadFile(read_end, buffer, sizeof buffer, &count, nullptr) && count > 0) {
         pending.append(buffer, count);
         size_t end;
         while ((end = pending.find('\n')) != std::string::npos) {
             std::string line = pending.substr(0, end);
             if (!line.empty() && line.back() == '\r')
                 line.pop_back();
-            onLine(line);
+            on_line(line);
             pending.erase(0, end + 1);
         }
     }
     if (!pending.empty())
-        onLine(pending);
-    CloseHandle(readEnd);
+        on_line(pending);
+    CloseHandle(read_end);
 
     WaitForSingleObject(process.hProcess, INFINITE);
-    DWORD exitCode = 1;
-    GetExitCodeProcess(process.hProcess, &exitCode);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
     CloseHandle(process.hProcess);
     CloseHandle(process.hThread);
-    return exitCode == 0;
+    return exit_code == 0;
 }
 
 static std::wstring buildCommand(const std::string& url, const std::filesystem::path& folder)
@@ -113,8 +113,8 @@ void startDownload(HWND notify, const std::string& url, const std::filesystem::p
 {
     std::thread([notify, url, folder] {
         auto result = std::make_unique<DownloadResult>();
-        std::string lastError;
-        bool gotVideo = false;
+        std::string last_error;
+        bool got_video = false;
 
         std::error_code error;
         std::filesystem::create_directories(folder, error);
@@ -123,14 +123,14 @@ void startDownload(HWND notify, const std::string& url, const std::filesystem::p
             if (line.rfind("progress ", 0) == 0)
                 PostMessageW(notify, WM_DOWNLOAD_PROGRESS, percentOf(line), 0);
             else if (line.rfind("{", 0) == 0)
-                gotVideo = readVideo(line, url, result->video);
+                got_video = readVideo(line, url, result->video);
             else if (line.rfind("ERROR:", 0) == 0)
-                lastError = line;
+                last_error = line;
         });
 
-        result->ok = ran && gotVideo;
+        result->ok = ran && got_video;
         if (!result->ok)
-            result->error = lastError.empty() ? "yt-dlp failed. Is it installed and on PATH?" : lastError;
+            result->error = last_error.empty() ? "yt-dlp failed. Is it installed and on PATH?" : last_error;
 
         if (PostMessageW(notify, WM_DOWNLOAD_DONE, 0, reinterpret_cast<LPARAM>(result.get())))
             result.release();

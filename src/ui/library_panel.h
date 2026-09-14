@@ -15,7 +15,7 @@ public:
 
     std::string url() const;
     void clearUrl();
-    bool isUrlBox(HWND window) const { return window == urlEdit_; }
+    bool isUrlBox(HWND window) const { return window == url_edit_; }
 
     void showProgress(int percent);
     void showStatus(const std::wstring& text);
@@ -26,12 +26,12 @@ public:
     int selected(size_t count) const;
 
 private:
-    HWND urlEdit_ = nullptr;
-    HWND downloadButton_ = nullptr;
+    HWND url_edit_ = nullptr;
+    HWND download_button_ = nullptr;
     HWND progress_ = nullptr;
     HWND status_ = nullptr;
     HWND label_ = nullptr;
     HWND list_ = nullptr;
-    HWND openButton_ = nullptr;
-    HWND removeButton_ = nullptr;
+    HWND open_button_ = nullptr;
+    HWND remove_button_ = nullptr;
 };

@@ -11,49 +11,49 @@ using namespace ui;
 
 void MarksPanel::create(const Context& context)
 {
-    const DWORD listStyle = WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT;
+    const DWORD list_style = WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT;
 
-    startLabel_ = addControl(context, L"STATIC", L"Start at", SS_LEFT, 0);
-    startEdit_ = addControl(context, L"EDIT", L"", ES_AUTOHSCROLL, kStart, WS_EX_CLIENTEDGE);
-    setStartButton_ = addControl(context, L"BUTTON", L"Set", BS_PUSHBUTTON, kSetStart);
-    goStartButton_ = addControl(context, L"BUTTON", L"Go", BS_PUSHBUTTON, kGoStart);
+    start_label_ = addControl(context, L"STATIC", L"Start at", SS_LEFT, 0);
+    start_edit_ = addControl(context, L"EDIT", L"", ES_AUTOHSCROLL, kStart, WS_EX_CLIENTEDGE);
+    set_start_button_ = addControl(context, L"BUTTON", L"Set", BS_PUSHBUTTON, kSetStart);
+    go_start_button_ = addControl(context, L"BUTTON", L"Go", BS_PUSHBUTTON, kGoStart);
 
-    marksLabel_ = addControl(context, L"STATIC", L"Bookmarks", SS_LEFT, 0);
-    list_ = addControl(context, L"LISTBOX", L"", listStyle, kMarks, WS_EX_CLIENTEDGE);
-    labelEdit_ = addControl(context, L"EDIT", L"", ES_AUTOHSCROLL, kMarkLabel, WS_EX_CLIENTEDGE);
-    addButton_ = addControl(context, L"BUTTON", L"Add", BS_PUSHBUTTON, kAddMark);
-    deleteButton_ = addControl(context, L"BUTTON", L"Delete", BS_PUSHBUTTON, kDeleteMark);
+    marks_label_ = addControl(context, L"STATIC", L"Bookmarks", SS_LEFT, 0);
+    list_ = addControl(context, L"LISTBOX", L"", list_style, kMarks, WS_EX_CLIENTEDGE);
+    label_edit_ = addControl(context, L"EDIT", L"", ES_AUTOHSCROLL, kMarkLabel, WS_EX_CLIENTEDGE);
+    add_button_ = addControl(context, L"BUTTON", L"Add", BS_PUSHBUTTON, kAddMark);
+    delete_button_ = addControl(context, L"BUTTON", L"Delete", BS_PUSHBUTTON, kDeleteMark);
 
-    SendMessageW(startEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"0:00"));
-    SendMessageW(labelEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Label (optional)"));
+    SendMessageW(start_edit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"0:00"));
+    SendMessageW(label_edit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Label (optional)"));
 }
 
 void MarksPanel::layout(int width, int height)
 {
     int bottom = height - kPad - kRow;
     int left = width - kPad - kSide;
-    int labelRowY = bottom - kGap - kRow;
+    int label_row_y = bottom - kGap - kRow;
 
     int y = kPad;
-    MoveWindow(startLabel_, left, y, kSide, kLabel, TRUE);
+    MoveWindow(start_label_, left, y, kSide, kLabel, TRUE);
     y += kLabel;
-    MoveWindow(startEdit_, left, y, kSide - kButton * 2 - kGap * 2, kRow, TRUE);
-    MoveWindow(setStartButton_, left + kSide - kButton * 2 - kGap, y, kButton, kRow, TRUE);
-    MoveWindow(goStartButton_, left + kSide - kButton, y, kButton, kRow, TRUE);
+    MoveWindow(start_edit_, left, y, kSide - kButton * 2 - kGap * 2, kRow, TRUE);
+    MoveWindow(set_start_button_, left + kSide - kButton * 2 - kGap, y, kButton, kRow, TRUE);
+    MoveWindow(go_start_button_, left + kSide - kButton, y, kButton, kRow, TRUE);
     y += kRow + kPad;
-    MoveWindow(marksLabel_, left, y, kSide, kLabel, TRUE);
+    MoveWindow(marks_label_, left, y, kSide, kLabel, TRUE);
     y += kLabel;
-    MoveWindow(list_, left, y, kSide, std::max(0, labelRowY - kGap - y), TRUE);
-    MoveWindow(labelEdit_, left, labelRowY, kSide - kSmallButton - kGap, kRow, TRUE);
-    MoveWindow(addButton_, left + kSide - kSmallButton, labelRowY, kSmallButton, kRow, TRUE);
-    MoveWindow(deleteButton_, left, bottom, kSide, kRow, TRUE);
+    MoveWindow(list_, left, y, kSide, std::max(0, label_row_y - kGap - y), TRUE);
+    MoveWindow(label_edit_, left, label_row_y, kSide - kSmallButton - kGap, kRow, TRUE);
+    MoveWindow(add_button_, left + kSide - kSmallButton, label_row_y, kSmallButton, kRow, TRUE);
+    MoveWindow(delete_button_, left, bottom, kSide, kRow, TRUE);
 }
 
 void MarksPanel::show(const Video* video)
 {
     SendMessageW(list_, LB_RESETCONTENT, 0, 0);
     if (!video) {
-        setText(startEdit_, L"");
+        setText(start_edit_, L"");
         return;
     }
 
@@ -66,18 +66,18 @@ void MarksPanel::show(const Video* video)
 
 void MarksPanel::showStart(int seconds)
 {
-    setText(startEdit_, widen(timecode::format(seconds)));
+    setText(start_edit_, widen(timecode::format(seconds)));
 }
 
 std::string MarksPanel::startText() const
 {
-    return narrow(textOf(startEdit_));
+    return narrow(textOf(start_edit_));
 }
 
 std::string MarksPanel::takeLabel()
 {
-    std::string label = trim(narrow(textOf(labelEdit_)));
-    SetWindowTextW(labelEdit_, L"");
+    std::string label = trim(narrow(textOf(label_edit_)));
+    SetWindowTextW(label_edit_, L"");
     return label;
 }
 

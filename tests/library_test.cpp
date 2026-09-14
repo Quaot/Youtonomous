@@ -153,9 +153,9 @@ static void testAddAndFind()
     check(mike && mike->id == "mike", "findByUrl() returns the video with that url");
     check(library.findByUrl("https://www.youtube.com/watch?v=nope") == nullptr, "findByUrl() of an unknown url returns nullptr");
 
-    Video noUrl = makeVideo("local", "Local file");
-    noUrl.url = "";
-    library.add(noUrl);
+    Video no_url = makeVideo("local", "Local file");
+    no_url.url = "";
+    library.add(no_url);
     check(library.findByUrl("") == nullptr, "findByUrl(\"\") never matches, even when a video has an empty url");
     check(library.find("local") != nullptr, "a video without url can be found by id");
 
@@ -354,8 +354,8 @@ static void testRoundTrip()
 
     Video* found = loaded.find("abc123XYZ_-");
     check(found && found->title == videos[0].title, "find() works after load()");
-    Video* byUrl = loaded.findByUrl(videos[0].url);
-    check(byUrl && byUrl->id == videos[0].id, "findByUrl() works after load()");
+    Video* by_url = loaded.findByUrl(videos[0].url);
+    check(by_url && by_url->id == videos[0].id, "findByUrl() works after load()");
     check(loaded.findByUrl("") == nullptr, "findByUrl(\"\") does not match the loaded video with an empty url");
 
     check(tryLoad(loaded, "second load"), "load() twice returns true");
@@ -512,22 +512,22 @@ static void testInvalidFiles()
     check(numbers.videos().empty(), "no videos are created from an array of numbers, got " + std::to_string(numbers.videos().size()));
 
     fs::path probe = root / "probe" / "library.json";
-    Library probeLibrary(probe);
-    probeLibrary.add(makeVideo("a", "A"));
-    trySave(probeLibrary, "probe");
-    bool savedAsArray = false;
+    Library probe_library(probe);
+    probe_library.add(makeVideo("a", "A"));
+    trySave(probe_library, "probe");
+    bool saved_as_array = false;
     try {
-        savedAsArray = nlohmann::json::parse(readFile(probe)).is_array();
+        saved_as_array = nlohmann::json::parse(readFile(probe)).is_array();
     } catch (...) {
     }
-    if (savedAsArray) {
+    if (saved_as_array) {
         loadRejects("a JSON object", "{\"id\": \"a\", \"title\": \"A\"}");
         loadRejects("an empty JSON object", "{}");
         writeFile(file, "[]");
-        Library emptyArray(file);
-        emptyArray.add(makeVideo("stale", "Stale"));
-        check(tryLoad(emptyArray, "empty array"), "load() of an empty JSON array returns true");
-        check(emptyArray.videos().empty(), "load() of an empty JSON array gives no videos");
+        Library empty_array(file);
+        empty_array.add(makeVideo("stale", "Stale"));
+        check(tryLoad(empty_array, "empty array"), "load() of an empty JSON array returns true");
+        check(empty_array.videos().empty(), "load() of an empty JSON array gives no videos");
     }
 
     Library recovered(file);

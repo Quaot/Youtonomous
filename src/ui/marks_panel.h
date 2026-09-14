@@ -18,18 +18,18 @@ public:
     std::string takeLabel();
     int selected(size_t count) const;
 
-    bool isStartBox(HWND window) const { return window == startEdit_; }
-    bool isLabelBox(HWND window) const { return window == labelEdit_; }
+    bool isStartBox(HWND window) const { return window == start_edit_; }
+    bool isLabelBox(HWND window) const { return window == label_edit_; }
 
 private:
-    HWND startLabel_ = nullptr;
-    HWND startEdit_ = nullptr;
-    HWND setStartButton_ = nullptr;
-    HWND goStartButton_ = nullptr;
+    HWND start_label_ = nullptr;
+    HWND start_edit_ = nullptr;
+    HWND set_start_button_ = nullptr;
+    HWND go_start_button_ = nullptr;
 
-    HWND marksLabel_ = nullptr;
+    HWND marks_label_ = nullptr;
     HWND list_ = nullptr;
-    HWND labelEdit_ = nullptr;
-    HWND addButton_ = nullptr;
-    HWND deleteButton_ = nullptr;
+    HWND label_edit_ = nullptr;
+    HWND add_button_ = nullptr;
+    HWND delete_button_ = nullptr;
 };

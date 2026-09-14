@@ -200,25 +200,25 @@ static void testFormat()
 
 static void testRoundTrip()
 {
-    int badRoundTrip = -1;
-    int badShape = -1;
+    int bad_round_trip = -1;
+    int bad_shape = -1;
     for (int n = 0; n <= 400000; ++n) {
         std::string text = timecode::format(n);
         std::optional<int> result = timecode::parse(text);
-        if (badRoundTrip < 0 && (!result || *result != n))
-            badRoundTrip = n;
-        if (badShape < 0 && !wellFormed(n, text))
-            badShape = n;
+        if (bad_round_trip < 0 && (!result || *result != n))
+            bad_round_trip = n;
+        if (bad_shape < 0 && !wellFormed(n, text))
+            bad_shape = n;
     }
-    std::string roundTripName = "parse(format(n)) == n for n in 0..400000, first bad n = " + std::to_string(badRoundTrip);
-    if (badRoundTrip >= 0)
-        roundTripName += " (format gives " + show(timecode::format(badRoundTrip)) + ")";
-    check(badRoundTrip < 0, roundTripName);
+    std::string round_trip_name = "parse(format(n)) == n for n in 0..400000, first bad n = " + std::to_string(bad_round_trip);
+    if (bad_round_trip >= 0)
+        round_trip_name += " (format gives " + show(timecode::format(bad_round_trip)) + ")";
+    check(bad_round_trip < 0, round_trip_name);
 
-    std::string shapeName = "format(n) is M:SS below an hour and H:MM:SS from an hour, first bad n = " + std::to_string(badShape);
-    if (badShape >= 0)
-        shapeName += " (format gives " + show(timecode::format(badShape)) + ")";
-    check(badShape < 0, shapeName);
+    std::string shape_name = "format(n) is M:SS below an hour and H:MM:SS from an hour, first bad n = " + std::to_string(bad_shape);
+    if (bad_shape >= 0)
+        shape_name += " (format gives " + show(timecode::format(bad_shape)) + ")";
+    check(bad_shape < 0, shape_name);
 
     for (int n : {359999, 360000, 3599999, 86400 * 365, 1000000000, INT_MAX - 1, INT_MAX}) {
         std::optional<int> result = timecode::parse(timecode::format(n));

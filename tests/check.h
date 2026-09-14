@@ -3,14 +3,14 @@
 #include <cstdio>
 #include <string>
 
-inline int checkCount = 0;
-inline int failCount = 0;
+inline int check_count = 0;
+inline int fail_count = 0;
 
 inline void check(bool ok, const std::string& name)
 {
-    ++checkCount;
+    ++check_count;
     if (!ok) {
-        ++failCount;
+        ++fail_count;
         std::printf("FAIL: %s\n", name.c_str());
         std::fflush(stdout);
     }
@@ -18,7 +18,7 @@ inline void check(bool ok, const std::string& name)
 
 inline int report()
 {
-    std::printf("%d checks, %d failed\n", checkCount, failCount);
+    std::printf("%d checks, %d failed\n", check_count, fail_count);
     std::fflush(stdout);
-    return failCount == 0 ? 0 : 1;
+    return fail_count == 0 ? 0 : 1;
 }

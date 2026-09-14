@@ -22,8 +22,8 @@ public:
     bool handleKey(const MSG& msg);
 
 private:
-    static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    LRESULT handle(UINT msg, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param);
+    LRESULT handle(UINT msg, WPARAM w_param, LPARAM l_param);
 
     void createControls();
     void layout(int width, int height);
@@ -52,13 +52,13 @@ private:
     HINSTANCE instance_ = nullptr;
     HFONT font_ = nullptr;
 
-    LibraryPanel libraryPanel_;
-    PlayerPanel playerPanel_;
-    MarksPanel marksPanel_;
+    LibraryPanel library_panel_;
+    PlayerPanel player_panel_;
+    MarksPanel marks_panel_;
 
-    std::filesystem::path videosFolder_;
+    std::filesystem::path videos_folder_;
     Library library_;
     std::unique_ptr<Player> player_ = makePlayer("vlc");
-    std::string currentId_;
+    std::string current_id_;
     bool downloading_ = false;
 };

@@ -2,10 +2,10 @@
 
 namespace ui {
 
-HWND addControl(const Context& context, const wchar_t* type, const wchar_t* text, DWORD style, int id, DWORD exStyle)
+HWND addControl(const Context& context, const wchar_t* type, const wchar_t* text, DWORD style, int id, DWORD ex_style)
 {
     HMENU menu = reinterpret_cast<HMENU>(static_cast<INT_PTR>(id));
-    HWND control = CreateWindowExW(exStyle, type, text, WS_CHILD | WS_VISIBLE | style,
+    HWND control = CreateWindowExW(ex_style, type, text, WS_CHILD | WS_VISIBLE | style,
                                    0, 0, 0, 0, context.parent, menu, context.instance, nullptr);
     SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(context.font), TRUE);
     return control;

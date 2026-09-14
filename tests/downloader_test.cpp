@@ -15,13 +15,13 @@ using Clock = std::chrono::steady_clock;
 
 struct Outcome {
     int done = 0;
-    int nullResults = 0;
+    int null_results = 0;
     std::vector<DownloadResult> results;
     std::vector<WPARAM> progress;
-    int progressAfterAllDone = 0;
+    int progress_after_all_done = 0;
 };
 
-static Outcome collect(HWND window, int expectedDone)
+static Outcome collect(HWND window, int expected_done)
 {
     Outcome outcome;
     Clock::time_point end = Clock::now() + std::chrono::seconds(60);
@@ -32,17 +32,17 @@ static Outcome collect(HWND window, int expectedDone)
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.hwnd == window && msg.message == WM_DOWNLOAD_PROGRESS) {
                 outcome.progress.push_back(msg.wParam);
-                if (outcome.done >= expectedDone)
-                    ++outcome.progressAfterAllDone;
+                if (outcome.done >= expected_done)
+                    ++outcome.progress_after_all_done;
             } else if (msg.hwnd == window && msg.message == WM_DOWNLOAD_DONE) {
                 DownloadResult* result = reinterpret_cast<DownloadResult*>(msg.lParam);
                 ++outcome.done;
                 if (result)
                     outcome.results.push_back(*result);
                 else
-                    ++outcome.nullResults;
+                    ++outcome.null_results;
                 delete result;
-                if (outcome.done == expectedDone)
+                if (outcome.done == expected_done)
                     end = Clock::now() + std::chrono::seconds(3);
             } else {
                 TranslateMessage(&msg);
@@ -53,10 +53,10 @@ static Outcome collect(HWND window, int expectedDone)
     return outcome;
 }
 
-static void expectFailures(const Outcome& outcome, int expectedDone, const std::string& name)
+static void expectFailures(const Outcome& outcome, int expected_done, const std::string& name)
 {
-    check(outcome.done == expectedDone, name + ": exactly " + std::to_string(expectedDone) + " WM_DOWNLOAD_DONE within 60 s, got " + std::to_string(outcome.done));
-    check(outcome.nullResults == 0, name + ": WM_DOWNLOAD_DONE carries a DownloadResult");
+    check(outcome.done == expected_done, name + ": exactly " + std::to_string(expected_done) + " WM_DOWNLOAD_DONE within 60 s, got " + std::to_string(outcome.done));
+    check(outcome.null_results == 0, name + ": WM_DOWNLOAD_DONE carries a DownloadResult");
     for (const DownloadResult& result : outcome.results) {
         check(!result.ok, name + ": result is not ok");
         check(!result.error.empty(), name + ": result has an error message");
@@ -66,7 +66,7 @@ static void expectFailures(const Outcome& outcome, int expectedDone, const std::
         if (percent > highest)
             highest = percent;
     check(highest <= 100, name + ": progress stays within 0..100, highest " + std::to_string(static_cast<long long>(highest)));
-    check(outcome.progressAfterAllDone == 0, name + ": no progress after WM_DOWNLOAD_DONE, got " + std::to_string(outcome.progressAfterAllDone));
+    check(outcome.progress_after_all_done == 0, name + ": no progress after WM_DOWNLOAD_DONE, got " + std::to_string(outcome.progress_after_all_done));
 }
 
 static void testFailure(HWND window, const fs::path& folder, const std::string& url, const std::string& name)
@@ -84,11 +84,11 @@ int main()
     }
 
     HINSTANCE instance = GetModuleHandleW(nullptr);
-    WNDCLASSW windowClass = {};
-    windowClass.lpfnWndProc = DefWindowProcW;
-    windowClass.hInstance = instance;
-    windowClass.lpszClassName = L"DownloaderTestWindow";
-    RegisterClassW(&windowClass);
+    WNDCLASSW window_class = {};
+    window_class.lpfnWndProc = DefWindowProcW;
+    window_class.hInstance = instance;
+    window_class.lpszClassName = L"DownloaderTestWindow";
+    RegisterClassW(&window_class);
     HWND window = CreateWindowExW(0, L"DownloaderTestWindow", L"downloader test", WS_OVERLAPPEDWINDOW,
                                   0, 0, 100, 100, nullptr, nullptr, instance, nullptr);
     check(window != nullptr, "hidden window is created");

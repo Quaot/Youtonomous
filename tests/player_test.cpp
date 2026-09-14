@@ -14,21 +14,21 @@
 namespace fs = std::filesystem;
 using Clock = std::chrono::steady_clock;
 
-static HWND videoWindow;
+static HWND video_window;
 static std::string clip;
 static std::string backend = "vlc";
 
 static DWORD WINAPI windowThread(LPVOID created)
 {
-    videoWindow = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 320, 240, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    video_window = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 320, 240, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     SetEvent(static_cast<HANDLE>(created));
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
-    if (videoWindow)
-        DestroyWindow(videoWindow);
+    if (video_window)
+        DestroyWindow(video_window);
     return 0;
 }
 
@@ -54,12 +54,12 @@ static std::string num(int value)
     return std::to_string(value);
 }
 
-static bool runProcess(const std::wstring& commandLine, int milliseconds)
+static bool runProcess(const std::wstring& command_line, int milliseconds)
 {
     STARTUPINFOW startup = {};
     startup.cb = sizeof startup;
     PROCESS_INFORMATION process = {};
-    std::wstring buffer = commandLine;
+    std::wstring buffer = command_line;
     if (!CreateProcessW(nullptr, buffer.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process))
         return false;
     bool finished = WaitForSingleObject(process.hProcess, milliseconds) == WAIT_OBJECT_0;
@@ -93,7 +93,7 @@ static void testNothingOpen()
 {
     auto owned = makePlayer(backend);
     Player& player = *owned;
-    player.attach(videoWindow);
+    player.attach(video_window);
     check(!player.loaded(), "loaded() is false before open");
     check(!player.playing(), "playing() is false before open");
     check(player.time() == 0, "time() is 0 before open, got " + num(player.time()));
@@ -117,7 +117,7 @@ static void testMissingFile(const fs::path& folder)
 {
     auto owned = makePlayer(backend);
     Player& player = *owned;
-    player.attach(videoWindow);
+    player.attach(video_window);
     player.open((folder / "does-not-exist" / "missing.mp4").u8string(), 0);
     check(waitFor([&] { return !player.playing(); }, 5000), "a non-existent file does not end up playing");
     int lowest = 0;
@@ -138,7 +138,7 @@ static void testMissingFile(const fs::path& folder)
 
 static bool startPlaying(Player& player, int start)
 {
-    player.attach(videoWindow);
+    player.attach(video_window);
     player.open(clip, start);
     return waitFor([&] { return player.playing() && player.length() > 0; }, 10000);
 }
@@ -148,7 +148,7 @@ static void testOpen()
     auto owned = makePlayer(backend);
     Player& player = *owned;
     Clock::time_point opened = Clock::now();
-    player.attach(videoWindow);
+    player.attach(video_window);
     player.open(clip, 0);
     check(player.loaded(), "loaded() is true after open");
     check(waitFor([&] { return player.playing(); }, 10000), "playing() becomes true after open");
@@ -166,7 +166,7 @@ static void testOpenAtStart()
     auto owned = makePlayer(backend);
     Player& player = *owned;
     Clock::time_point opened = Clock::now();
-    player.attach(videoWindow);
+    player.attach(video_window);
     player.open(clip, 10);
     bool reached = waitFor([&] { return player.playing() && player.time() >= 10; }, 10000);
     int elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - opened).count());
@@ -263,7 +263,7 @@ static void testReopen(const fs::path& folder)
 {
     auto owned = makePlayer(backend);
     Player& player = *owned;
-    player.attach(videoWindow);
+    player.attach(video_window);
     player.open((folder / "missing.mp4").u8string(), 0);
     Sleep(1000);
     player.open(clip, 0);
@@ -286,8 +286,8 @@ int main(int argc, char** argv)
     }
 
     HANDLE created = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    DWORD threadId = 0;
-    HANDLE thread = CreateThread(nullptr, 0, windowThread, created, 0, &threadId);
+    DWORD thread_id = 0;
+    HANDLE thread = CreateThread(nullptr, 0, windowThread, created, 0, &thread_id);
     WaitForSingleObject(created, 10000);
     CloseHandle(created);
 
@@ -301,12 +301,12 @@ int main(int argc, char** argv)
     bool ready = makePlayer(backend)->ready();
     if (!ready) {
         std::printf("SKIP: VLC did not start\n");
-        result = failCount > 0 ? report() : 77;
+        result = fail_count > 0 ? report() : 77;
     } else {
         testMissingFile(folder);
         if (!makeClip(folder)) {
             std::printf("SKIP: ffmpeg not found or could not make a test clip\n");
-            result = failCount > 0 ? report() : 77;
+            result = fail_count > 0 ? report() : 77;
         } else {
             testOpen();
             testOpenAtStart();
@@ -318,7 +318,7 @@ int main(int argc, char** argv)
         }
     }
 
-    PostThreadMessageW(threadId, WM_QUIT, 0, 0);
+    PostThreadMessageW(thread_id, WM_QUIT, 0, 0);
     WaitForSingleObject(thread, 5000);
     CloseHandle(thread);
     fs::remove_all(folder, error);

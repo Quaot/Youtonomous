@@ -112,7 +112,7 @@ void dragTo(HWND bar, State& state, int x)
     InvalidateRect(bar, nullptr, FALSE);
 }
 
-LRESULT CALLBACK proc(HWND bar, UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK proc(HWND bar, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     State* state = stateOf(bar);
 
@@ -134,12 +134,12 @@ LRESULT CALLBACK proc(HWND bar, UINT msg, WPARAM wParam, LPARAM lParam)
         if (state->length > 0) {
             state->dragging = true;
             SetCapture(bar);
-            dragTo(bar, *state, GET_X_LPARAM(lParam));
+            dragTo(bar, *state, GET_X_LPARAM(l_param));
         }
         return 0;
     case WM_MOUSEMOVE:
         if (state->dragging)
-            dragTo(bar, *state, GET_X_LPARAM(lParam));
+            dragTo(bar, *state, GET_X_LPARAM(l_param));
         return 0;
     case WM_LBUTTONUP:
         if (state->dragging) {
@@ -152,7 +152,7 @@ LRESULT CALLBACK proc(HWND bar, UINT msg, WPARAM wParam, LPARAM lParam)
         state->dragging = false;
         return 0;
     }
-    return DefWindowProcW(bar, msg, wParam, lParam);
+    return DefWindowProcW(bar, msg, w_param, l_param);
 }
 
 }

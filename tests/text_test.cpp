@@ -108,24 +108,24 @@ static void testEmbeddedNull()
 
 static void testEveryCodePoint()
 {
-    char32_t firstBad = 0;
+    char32_t first_bad = 0;
     std::string all;
-    std::wstring allWide;
+    std::wstring all_wide;
     for (char32_t code = 1; code <= 0x10FFFF; ++code) {
         if (code >= 0xD800 && code <= 0xDFFF)
             continue;
         std::string bytes = utf8(code);
         std::wstring wide = utf16(code);
         all += bytes;
-        allWide += wide;
-        if (firstBad == 0 && (widen(bytes) != wide || narrow(wide) != bytes))
-            firstBad = code;
+        all_wide += wide;
+        if (first_bad == 0 && (widen(bytes) != wide || narrow(wide) != bytes))
+            first_bad = code;
     }
     char buffer[16];
-    std::snprintf(buffer, sizeof buffer, "U+%04X", static_cast<unsigned>(firstBad));
-    check(firstBad == 0, std::string("widen and narrow convert every code point on its own, first bad ") + buffer);
-    check(widen(all) == allWide, "widen of all code points in one string matches UTF-16");
-    check(narrow(allWide) == all, "narrow of all code points in one string matches UTF-8");
+    std::snprintf(buffer, sizeof buffer, "U+%04X", static_cast<unsigned>(first_bad));
+    check(first_bad == 0, std::string("widen and narrow convert every code point on its own, first bad ") + buffer);
+    check(widen(all) == all_wide, "widen of all code points in one string matches UTF-16");
+    check(narrow(all_wide) == all, "narrow of all code points in one string matches UTF-8");
 }
 
 static void testLongText()

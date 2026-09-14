@@ -38,16 +38,16 @@ static std::optional<int> parseUnits(const std::string& text)
 {
     long long total = 0;
     long long number = 0;
-    bool haveNumber = false;
+    bool have_number = false;
 
     for (char c : text) {
         if (isDigit(c)) {
             if (!addDigit(number, c))
                 return std::nullopt;
-            haveNumber = true;
+            have_number = true;
             continue;
         }
-        if (!haveNumber)
+        if (!have_number)
             return std::nullopt;
 
         switch (std::tolower(static_cast<unsigned char>(c))) {
@@ -59,7 +59,7 @@ static std::optional<int> parseUnits(const std::string& text)
         if (total > INT_MAX)
             return std::nullopt;
         number = 0;
-        haveNumber = false;
+        have_number = false;
     }
 
     total += number;
@@ -71,23 +71,23 @@ static std::optional<int> parseUnits(const std::string& text)
 static std::optional<int> parseColons(const std::string& text)
 {
     std::vector<long long> parts{0};
-    bool haveNumber = false;
+    bool have_number = false;
 
     for (char c : text) {
         if (c == ':') {
-            if (!haveNumber)
+            if (!have_number)
                 return std::nullopt;
             parts.push_back(0);
-            haveNumber = false;
+            have_number = false;
         } else if (isDigit(c)) {
             if (!addDigit(parts.back(), c))
                 return std::nullopt;
-            haveNumber = true;
+            have_number = true;
         } else {
             return std::nullopt;
         }
     }
-    if (!haveNumber || parts.size() > 3)
+    if (!have_number || parts.size() > 3)
         return std::nullopt;
 
     long long total = 0;

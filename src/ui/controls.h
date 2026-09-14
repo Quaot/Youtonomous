@@ -43,7 +43,7 @@ struct Context {
     HFONT font = nullptr;
 };
 
-HWND addControl(const Context& context, const wchar_t* type, const wchar_t* text, DWORD style, int id, DWORD exStyle = 0);
+HWND addControl(const Context& context, const wchar_t* type, const wchar_t* text, DWORD style, int id, DWORD ex_style = 0);
 
 std::wstring textOf(HWND control);
 void setText(HWND control, const std::wstring& text);

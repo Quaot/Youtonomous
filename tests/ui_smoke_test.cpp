@@ -18,7 +18,7 @@ using Clock = std::chrono::steady_clock;
 
 struct Search {
     DWORD pid = 0;
-    const wchar_t* className = nullptr;
+    const wchar_t* class_name = nullptr;
     std::vector<HWND> found;
 };
 
@@ -48,7 +48,7 @@ static std::wstring environmentWith(const fs::path& home)
     return block + L'\0';
 }
 
-static bool launch(std::wstring commandLine, std::wstring* environment, PROCESS_INFORMATION& process)
+static bool launch(std::wstring command_line, std::wstring* environment, PROCESS_INFORMATION& process)
 {
     STARTUPINFOW startup{};
     startup.cb = sizeof startup;
@@ -56,14 +56,14 @@ static bool launch(std::wstring commandLine, std::wstring* environment, PROCESS_
     if (!environment)
         flags |= CREATE_NO_WINDOW;
     LPVOID block = environment ? environment->data() : nullptr;
-    BOOL started = CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, FALSE, flags, block, nullptr, &startup, &process);
+    BOOL started = CreateProcessW(nullptr, command_line.data(), nullptr, nullptr, FALSE, flags, block, nullptr, &startup, &process);
     return started != 0;
 }
 
-static bool runToEnd(const std::wstring& commandLine)
+static bool runToEnd(const std::wstring& command_line)
 {
     PROCESS_INFORMATION process{};
-    if (!launch(commandLine, nullptr, process))
+    if (!launch(command_line, nullptr, process))
         return false;
     bool finished = WaitForSingleObject(process.hProcess, 120000) == WAIT_OBJECT_0;
     DWORD code = 1;
@@ -107,7 +107,7 @@ static BOOL CALLBACK findChild(HWND hwnd, LPARAM param)
 {
     auto* search = reinterpret_cast<Search*>(param);
     wchar_t name[64];
-    if (GetClassNameW(hwnd, name, 64) && _wcsicmp(name, search->className) == 0)
+    if (GetClassNameW(hwnd, name, 64) && _wcsicmp(name, search->class_name) == 0)
         search->found.push_back(hwnd);
     return TRUE;
 }
@@ -120,10 +120,10 @@ static HWND appWindow(DWORD pid)
     return search.found.empty() ? nullptr : search.found[0];
 }
 
-static std::vector<HWND> children(HWND top, const wchar_t* className)
+static std::vector<HWND> children(HWND top, const wchar_t* class_name)
 {
     Search search;
-    search.className = className;
+    search.class_name = class_name;
     EnumChildWindows(top, findChild, reinterpret_cast<LPARAM>(&search));
     return search.found;
 }
@@ -184,9 +184,9 @@ static int markCount(HWND top)
     return static_cast<int>(SendMessageW(lists[1], LB_GETCOUNT, 0, 0));
 }
 
-static nlohmann::json savedVideo(const fs::path& libraryFile)
+static nlohmann::json savedVideo(const fs::path& library_file)
 {
-    std::ifstream in(libraryFile);
+    std::ifstream in(library_file);
     nlohmann::json items = nlohmann::json::parse(in, nullptr, false);
     if (items.is_array() && !items.empty())
         return items[0];
@@ -235,10 +235,10 @@ static void clickSeekBar(HWND top, int numerator, int denominator)
     SendMessageW(bars[0], WM_LBUTTONUP, 0, point);
 }
 
-static void firstRun(const std::wstring& commandLine, std::wstring& environment, const fs::path& libraryFile)
+static void firstRun(const std::wstring& command_line, std::wstring& environment, const fs::path& library_file)
 {
     PROCESS_INFORMATION process{};
-    check(launch(commandLine, &environment, process), "app starts");
+    check(launch(command_line, &environment, process), "app starts");
     HWND top = nullptr;
     check(waitFor([&] { return (top = appWindow(process.dwProcessId)) != nullptr; }, 10000), "main window appears");
     if (!top)
@@ -267,11 +267,11 @@ static void firstRun(const std::wstring& commandLine, std::wstring& environment,
     if (edits.size() >= 3) {
         setText(edits[2], L"Smoke mark");
         click(top, L"Add");
-        check(waitFor([&] { return hasMark(savedVideo(libraryFile), "Smoke mark"); }, 3000), "Add saves a labelled bookmark");
+        check(waitFor([&] { return hasMark(savedVideo(library_file), "Smoke mark"); }, 3000), "Add saves a labelled bookmark");
 
         setText(edits[1], L"0:20");
         click(top, L"Set");
-        check(waitFor([&] { return savedVideo(libraryFile).value("start", -1) == 20; }, 3000), "Set saves the start point");
+        check(waitFor([&] { return savedVideo(library_file).value("start", -1) == 20; }, 3000), "Set saves the start point");
     }
 
     key(top, VK_HOME);
@@ -282,10 +282,10 @@ static void firstRun(const std::wstring& commandLine, std::wstring& environment,
     check(closeApp(process, top), "app closes cleanly");
 }
 
-static void secondRun(const std::wstring& commandLine, std::wstring& environment)
+static void secondRun(const std::wstring& command_line, std::wstring& environment)
 {
     PROCESS_INFORMATION process{};
-    check(launch(commandLine, &environment, process), "app starts again");
+    check(launch(command_line, &environment, process), "app starts again");
     HWND top = nullptr;
     check(waitFor([&] { return (top = appWindow(process.dwProcessId)) != nullptr; }, 10000), "main window appears again");
     if (!top)
@@ -317,12 +317,12 @@ int main(int argc, char** argv)
         return 77;
     }
 
-    std::wstring commandLine = L"\"" + fs::u8path(argv[1]).wstring() + L"\" \"" + clip.wstring() + L"\"";
+    std::wstring command_line = L"\"" + fs::u8path(argv[1]).wstring() + L"\" \"" + clip.wstring() + L"\"";
     std::wstring environment = environmentWith(root);
-    fs::path libraryFile = root / "AppData" / "Youtonomous" / "library.json";
+    fs::path library_file = root / "AppData" / "Youtonomous" / "library.json";
 
-    firstRun(commandLine, environment, libraryFile);
-    secondRun(commandLine, environment);
+    firstRun(command_line, environment, library_file);
+    secondRun(command_line, environment);
 
     fs::remove_all(root, error);
     return report();

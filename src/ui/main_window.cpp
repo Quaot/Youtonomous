@@ -26,7 +26,7 @@ std::filesystem::path folderFromEnv(const wchar_t* name)
 }
 
 MainWindow::MainWindow()
-    : videosFolder_(folderFromEnv(L"USERPROFILE") / L"Videos" / L"Youtonomous")
+    : videos_folder_(folderFromEnv(L"USERPROFILE") / L"Videos" / L"Youtonomous")
     , library_(folderFromEnv(L"APPDATA") / L"Youtonomous" / L"library.json")
 {
 }
@@ -59,21 +59,21 @@ bool MainWindow::create(HINSTANCE instance, int show)
     return true;
 }
 
-LRESULT CALLBACK MainWindow::proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK MainWindow::proc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     if (msg == WM_NCCREATE) {
-        auto* self = static_cast<MainWindow*>(reinterpret_cast<CREATESTRUCTW*>(lParam)->lpCreateParams);
+        auto* self = static_cast<MainWindow*>(reinterpret_cast<CREATESTRUCTW*>(l_param)->lpCreateParams);
         self->hwnd_ = hwnd;
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
     }
 
     auto* self = reinterpret_cast<MainWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     if (!self)
-        return DefWindowProcW(hwnd, msg, wParam, lParam);
-    return self->handle(msg, wParam, lParam);
+        return DefWindowProcW(hwnd, msg, w_param, l_param);
+    return self->handle(msg, w_param, l_param);
 }
 
-LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
 {
     switch (msg) {
     case WM_CREATE:
@@ -85,27 +85,27 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
             MessageBoxW(hwnd_, L"Could not start VLC.", L"Youtonomous", MB_ICONERROR);
         return 0;
     case WM_SIZE:
-        layout(LOWORD(lParam), HIWORD(lParam));
+        layout(LOWORD(l_param), HIWORD(l_param));
         return 0;
     case WM_COMMAND:
-        onCommand(LOWORD(wParam), HIWORD(wParam));
+        onCommand(LOWORD(w_param), HIWORD(w_param));
         return 0;
     case WM_TIMER:
         tick();
         return 0;
     case WM_SEEKBAR_SEEK:
-        player_->seek(static_cast<int>(wParam));
+        player_->seek(static_cast<int>(w_param));
         tick();
         return 0;
     case WM_LBUTTONDOWN:
         SetFocus(hwnd_);
         return 0;
     case WM_DOWNLOAD_PROGRESS:
-        libraryPanel_.showProgress(static_cast<int>(wParam));
-        libraryPanel_.showStatus(L"Downloading " + std::to_wstring(wParam) + L"%");
+        library_panel_.showProgress(static_cast<int>(w_param));
+        library_panel_.showStatus(L"Downloading " + std::to_wstring(w_param) + L"%");
         return 0;
     case WM_DOWNLOAD_DONE:
-        onDownloadDone(reinterpret_cast<DownloadResult*>(lParam));
+        onDownloadDone(reinterpret_cast<DownloadResult*>(l_param));
         return 0;
     case WM_DESTROY:
         KillTimer(hwnd_, kTimer);
@@ -113,7 +113,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
         PostQuitMessage(0);
         return 0;
     }
-    return DefWindowProcW(hwnd_, msg, wParam, lParam);
+    return DefWindowProcW(hwnd_, msg, w_param, l_param);
 }
 
 void MainWindow::createControls()
@@ -124,18 +124,18 @@ void MainWindow::createControls()
     font_ = CreateFontIndirectW(&metrics.lfMessageFont);
 
     Context context{hwnd_, instance_, font_};
-    libraryPanel_.create(context);
-    playerPanel_.create(context);
-    marksPanel_.create(context);
+    library_panel_.create(context);
+    player_panel_.create(context);
+    marks_panel_.create(context);
 
-    player_->attach(playerPanel_.videoWindow());
+    player_->attach(player_panel_.videoWindow());
 }
 
 void MainWindow::layout(int width, int height)
 {
-    libraryPanel_.layout(height);
-    playerPanel_.layout(width, height);
-    marksPanel_.layout(width, height);
+    library_panel_.layout(height);
+    player_panel_.layout(width, height);
+    marks_panel_.layout(width, height);
 }
 
 void MainWindow::onCommand(int id, int code)
@@ -157,7 +157,7 @@ void MainWindow::onCommand(int id, int code)
     case kDeleteMark: deleteSelectedMark(); break;
     case kLibrary:
         if (code == LBN_DBLCLK) {
-            int index = libraryPanel_.selected(library_.videos().size());
+            int index = library_panel_.selected(library_.videos().size());
             if (index >= 0)
                 openVideo(library_.videos()[index].id);
         }
@@ -175,7 +175,7 @@ void MainWindow::onCommand(int id, int code)
 
 void MainWindow::tick()
 {
-    playerPanel_.show(player_->time(), player_->length(), player_->playing());
+    player_panel_.show(player_->time(), player_->length(), player_->playing());
 }
 
 void MainWindow::openFile()
@@ -215,37 +215,37 @@ void MainWindow::openPath(const std::wstring& path)
 
 void MainWindow::download()
 {
-    std::string url = libraryPanel_.url();
+    std::string url = library_panel_.url();
     if (url.empty() || downloading_)
         return;
 
     if (url.find('"') != std::string::npos) {
-        libraryPanel_.showStatus(L"That link has a quote mark in it.");
+        library_panel_.showStatus(L"That link has a quote mark in it.");
         return;
     }
 
     if (Video* existing = library_.findByUrl(url)) {
-        libraryPanel_.showStatus(L"Already in the library.");
+        library_panel_.showStatus(L"Already in the library.");
         openVideo(existing->id);
         return;
     }
 
     downloading_ = true;
-    libraryPanel_.setDownloading(true);
-    libraryPanel_.showProgress(0);
-    libraryPanel_.showStatus(L"Starting...");
-    startDownload(hwnd_, url, videosFolder_);
+    library_panel_.setDownloading(true);
+    library_panel_.showProgress(0);
+    library_panel_.showStatus(L"Starting...");
+    startDownload(hwnd_, url, videos_folder_);
 }
 
 void MainWindow::onDownloadDone(DownloadResult* raw)
 {
     std::unique_ptr<DownloadResult> result(raw);
     downloading_ = false;
-    libraryPanel_.setDownloading(false);
+    library_panel_.setDownloading(false);
 
     if (!result->ok) {
-        libraryPanel_.showProgress(0);
-        libraryPanel_.showStatus(widen(result->error));
+        library_panel_.showProgress(0);
+        library_panel_.showStatus(widen(result->error));
         return;
     }
 
@@ -263,15 +263,15 @@ void MainWindow::onDownloadDone(DownloadResult* raw)
     library_.save();
     refreshLibrary();
 
-    libraryPanel_.showProgress(100);
-    libraryPanel_.showStatus(L"Done: " + widen(downloaded.title));
-    libraryPanel_.clearUrl();
+    library_panel_.showProgress(100);
+    library_panel_.showStatus(L"Done: " + widen(downloaded.title));
+    library_panel_.clearUrl();
     openVideo(id);
 }
 
 void MainWindow::refreshLibrary()
 {
-    libraryPanel_.showVideos(library_.videos());
+    library_panel_.showVideos(library_.videos());
 }
 
 void MainWindow::openVideo(const std::string& id)
@@ -288,16 +288,16 @@ void MainWindow::openVideo(const std::string& id)
         return;
     }
 
-    currentId_ = id;
+    current_id_ = id;
     player_->open(found->file, found->start);
-    libraryPanel_.select(static_cast<int>(found - videos.begin()));
+    library_panel_.select(static_cast<int>(found - videos.begin()));
     SetWindowTextW(hwnd_, (L"Youtonomous - " + widen(found->title)).c_str());
     refreshMarks();
 }
 
 void MainWindow::removeSelected()
 {
-    int index = libraryPanel_.selected(library_.videos().size());
+    int index = library_panel_.selected(library_.videos().size());
     if (index < 0)
         return;
 
@@ -315,17 +315,17 @@ void MainWindow::removeSelected()
 
 Video* MainWindow::current()
 {
-    return currentId_.empty() ? nullptr : library_.find(currentId_);
+    return current_id_.empty() ? nullptr : library_.find(current_id_);
 }
 
 void MainWindow::refreshMarks()
 {
     Video* video = current();
-    marksPanel_.show(video);
+    marks_panel_.show(video);
     if (video)
-        playerPanel_.showMarks(video->marks, video->start);
+        player_panel_.showMarks(video->marks, video->start);
     else
-        playerPanel_.showMarks({}, 0);
+        player_panel_.showMarks({}, 0);
 }
 
 void MainWindow::addMark()
@@ -334,7 +334,7 @@ void MainWindow::addMark()
     if (!video || !player_->loaded())
         return;
 
-    std::string label = marksPanel_.takeLabel();
+    std::string label = marks_panel_.takeLabel();
     if (label.empty())
         label = "Bookmark";
 
@@ -349,7 +349,7 @@ void MainWindow::deleteSelectedMark()
     if (!video)
         return;
 
-    int index = marksPanel_.selected(video->marks.size());
+    int index = marks_panel_.selected(video->marks.size());
     if (index < 0)
         return;
 
@@ -364,7 +364,7 @@ void MainWindow::jumpToSelectedMark()
     if (!video)
         return;
 
-    int index = marksPanel_.selected(video->marks.size());
+    int index = marks_panel_.selected(video->marks.size());
     if (index >= 0)
         player_->seek(video->marks[index].time);
 }
@@ -397,10 +397,10 @@ void MainWindow::saveStartFromBox()
     if (!video)
         return;
 
-    std::optional<int> start = timecode::parse(marksPanel_.startText());
+    std::optional<int> start = timecode::parse(marks_panel_.startText());
     if (!start) {
         MessageBeep(MB_ICONWARNING);
-        marksPanel_.showStart(video->start);
+        marks_panel_.showStart(video->start);
         return;
     }
     setStart(*start);
@@ -433,15 +433,15 @@ bool MainWindow::handleKey(const MSG& msg)
         return false;
 
     HWND focus = GetFocus();
-    bool inUrl = libraryPanel_.isUrlBox(focus);
-    bool inStart = marksPanel_.isStartBox(focus);
-    bool inLabel = marksPanel_.isLabelBox(focus);
-    bool typing = inUrl || inStart || inLabel;
+    bool in_url = library_panel_.isUrlBox(focus);
+    bool in_start = marks_panel_.isStartBox(focus);
+    bool in_label = marks_panel_.isLabelBox(focus);
+    bool typing = in_url || in_start || in_label;
 
     if (msg.wParam == VK_RETURN && typing) {
-        if (inUrl)
+        if (in_url)
             download();
-        else if (inStart)
+        else if (in_start)
             saveStartFromBox();
         else
             addMark();
