@@ -23,11 +23,27 @@ std::filesystem::path folderFromEnv(const wchar_t* name)
     return value ? std::filesystem::path(value) : std::filesystem::current_path();
 }
 
+std::filesystem::path videosFolder(const Settings& settings)
+{
+    if (!settings.videos_folder.empty())
+        return std::filesystem::u8path(settings.videos_folder);
+    return folderFromEnv(L"USERPROFILE") / L"Videos" / L"Youtonomous";
+}
+
+bool onSomeScreen(int x, int y, int width, int height)
+{
+    RECT rect{x, y, x + width, y + height};
+    return MonitorFromRect(&rect, MONITOR_DEFAULTTONULL) != nullptr;
+}
+
 }
 
 MainWindow::MainWindow()
-    : videos_folder_(folderFromEnv(L"USERPROFILE") / L"Videos" / L"Youtonomous")
+    : settings_file_(folderFromEnv(L"APPDATA") / L"Youtonomous" / L"settings.json")
+    , settings_(loadSettings(settings_file_))
+    , videos_folder_(videosFolder(settings_))
     , library_(folderFromEnv(L"APPDATA") / L"Youtonomous" / L"library.json")
+    , player_(makePlayer(settings_.backend))
 {
 }
 
@@ -50,12 +66,20 @@ bool MainWindow::create(HINSTANCE instance, int show)
     wc.lpszClassName = L"Youtonomous";
     RegisterClassExW(&wc);
 
+    int x = CW_USEDEFAULT;
+    int y = CW_USEDEFAULT;
+    bool placed = settings_.window_x != -1 && settings_.window_y != -1;
+    if (placed && onSomeScreen(settings_.window_x, settings_.window_y, settings_.window_width, settings_.window_height)) {
+        x = settings_.window_x;
+        y = settings_.window_y;
+    }
+
     hwnd_ = CreateWindowExW(0, wc.lpszClassName, L"Youtonomous", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                            CW_USEDEFAULT, CW_USEDEFAULT, 1280, 760, nullptr, nullptr, instance, this);
+                            x, y, settings_.window_width, settings_.window_height, nullptr, nullptr, instance, this);
     if (!hwnd_)
         return false;
 
-    ShowWindow(hwnd_, show);
+    ShowWindow(hwnd_, settings_.maximized ? SW_SHOWMAXIMIZED : show);
     return true;
 }
 
@@ -73,6 +97,26 @@ LRESULT CALLBACK MainWindow::proc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_
     return self->handle(msg, w_param, l_param);
 }
 
+void MainWindow::saveWindowSettings()
+{
+    RECT rect{};
+    if (IsZoomed(hwnd_) || IsIconic(hwnd_)) {
+        WINDOWPLACEMENT placement{};
+        placement.length = sizeof placement;
+        GetWindowPlacement(hwnd_, &placement);
+        rect = placement.rcNormalPosition;
+    } else {
+        GetWindowRect(hwnd_, &rect);
+    }
+
+    settings_.window_x = rect.left;
+    settings_.window_y = rect.top;
+    settings_.window_width = rect.right - rect.left;
+    settings_.window_height = rect.bottom - rect.top;
+    settings_.maximized = IsZoomed(hwnd_) != 0;
+    saveSettings(settings_, settings_file_);
+}
+
 LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
 {
     switch (msg) {
@@ -81,8 +125,10 @@ LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
         library_.load();
         refreshLibrary();
         SetTimer(hwnd_, kTimer, 250, nullptr);
-        if (!player_->ready())
-            MessageBoxW(hwnd_, L"Could not start VLC.", L"Youtonomous", MB_ICONERROR);
+        if (!player_ || !player_->ready()) {
+            std::wstring message = L"Could not start the " + widen(settings_.backend) + L" player.";
+            MessageBoxW(hwnd_, message.c_str(), L"Youtonomous", MB_ICONERROR);
+        }
         return 0;
     case WM_SIZE:
         layout(LOWORD(l_param), HIWORD(l_param));
@@ -108,6 +154,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
         onDownloadDone(reinterpret_cast<DownloadResult*>(l_param));
         return 0;
     case WM_DESTROY:
+        saveWindowSettings();
         KillTimer(hwnd_, kTimer);
         DeleteObject(font_);
         PostQuitMessage(0);

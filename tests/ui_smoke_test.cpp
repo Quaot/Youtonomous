@@ -282,6 +282,13 @@ static void firstRun(const std::wstring& command_line, std::wstring& environment
     check(closeApp(process, top), "app closes cleanly");
 }
 
+static nlohmann::json readJson(const fs::path& file)
+{
+    std::ifstream in(file);
+    nlohmann::json item = nlohmann::json::parse(in, nullptr, false);
+    return item.is_object() ? item : nlohmann::json::object();
+}
+
 static void secondRun(const std::wstring& command_line, std::wstring& environment)
 {
     PROCESS_INFORMATION process{};
@@ -290,6 +297,13 @@ static void secondRun(const std::wstring& command_line, std::wstring& environmen
     check(waitFor([&] { return (top = appWindow(process.dwProcessId)) != nullptr; }, 10000), "main window appears again");
     if (!top)
         return;
+
+    RECT rect{};
+    GetWindowRect(top, &rect);
+    std::string position = std::to_string(rect.left) + "," + std::to_string(rect.top);
+    std::string size = std::to_string(rect.right - rect.left) + "x" + std::to_string(rect.bottom - rect.top);
+    check(within(rect.left, 48, 52) && within(rect.top, 58, 62), "window opens at the saved position, got " + position);
+    check(within(rect.right - rect.left, 998, 1002) && within(rect.bottom - rect.top, 698, 702), "window opens at the saved size, got " + size);
 
     int first = -1;
     waitFor([&] { return (first = playbackTime(top)) >= 1; }, 15000);
@@ -320,9 +334,23 @@ int main(int argc, char** argv)
     std::wstring command_line = L"\"" + fs::u8path(argv[1]).wstring() + L"\" \"" + clip.wstring() + L"\"";
     std::wstring environment = environmentWith(root);
     fs::path library_file = root / "AppData" / "Youtonomous" / "library.json";
+    fs::path settings_file = root / "AppData" / "Youtonomous" / "settings.json";
 
     firstRun(command_line, environment, library_file);
+
+    nlohmann::json settings = readJson(settings_file);
+    check(settings.contains("window_width"), "closing the app saves settings");
+    settings["window_x"] = 50;
+    settings["window_y"] = 60;
+    settings["window_width"] = 1000;
+    settings["window_height"] = 700;
+    settings["maximized"] = false;
+    std::ofstream(settings_file) << settings.dump();
+
     secondRun(command_line, environment);
+
+    nlohmann::json after = readJson(settings_file);
+    check(after.value("window_x", -1) == 50 && after.value("window_width", 0) == 1000, "settings are saved again on close");
 
     fs::remove_all(root, error);
     return report();

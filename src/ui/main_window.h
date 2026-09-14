@@ -12,6 +12,7 @@
 #include "make_player.h"
 #include "marks_panel.h"
 #include "player_panel.h"
+#include "settings.h"
 
 class MainWindow {
 public:
@@ -29,6 +30,7 @@ private:
     void layout(int width, int height);
     void onCommand(int id, int code);
     void tick();
+    void saveWindowSettings();
 
     void openFile();
     void download();
@@ -56,9 +58,11 @@ private:
     PlayerPanel player_panel_;
     MarksPanel marks_panel_;
 
+    std::filesystem::path settings_file_;
+    Settings settings_;
     std::filesystem::path videos_folder_;
     Library library_;
-    std::unique_ptr<Player> player_ = makePlayer("vlc");
+    std::unique_ptr<Player> player_;
     std::string current_id_;
     bool downloading_ = false;
 };
