@@ -18,10 +18,11 @@ target_link_libraries(core PUBLIC nlohmann_json::nlohmann_json)
 
 add_library(players STATIC
     src/player/vlc_player.cpp
+    src/player/mpv_player.cpp
     src/player/make_player.cpp
 )
 target_include_directories(players PUBLIC src/player)
-target_link_libraries(players PUBLIC vlc)
+target_link_libraries(players PUBLIC vlc mpv)
 
 configure_file(packaging/app.rc.in app.rc @ONLY)
 
@@ -63,6 +64,8 @@ add_executable(player_test tests/player_test.cpp)
 target_link_libraries(player_test PRIVATE core players)
 add_test(NAME player_vlc COMMAND player_test vlc)
 set_tests_properties(player_vlc PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+add_test(NAME player_mpv COMMAND player_test mpv)
+set_tests_properties(player_mpv PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
 
 add_executable(downloader_test tests/downloader_test.cpp src/downloader.cpp)
 target_link_libraries(downloader_test PRIVATE core)
