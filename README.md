@@ -64,7 +64,7 @@ Keys do nothing while you type in a text box. Enter in a box does what its butto
 
 ## Files
 
-The library lives in `%APPDATA%\Youtonomous\library.json`. Videos go to `%USERPROFILE%\Videos\Youtonomous`.
+The library is stored in `%APPDATA%\Youtonomous\library.json`. Videos go to `%USERPROFILE%\Videos\Youtonomous`.
 
 ## License
 
