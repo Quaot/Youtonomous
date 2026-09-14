@@ -152,8 +152,7 @@ static void testInvalid()
         "4::30", ":30", "4:", ":", "::", "1:02:", ":02:03", "1::03", "1:02:03:04",
         "0:60", "4:60", "1:60", "1:02:60", "1:60:00", "1:00:60", "1:02:99", "4:-30", "1:-1:00",
         "4.5", "4,30", "4;30", "4.30", "4 30", "4:30 5", "1 h",
-        "m", "h", "s", "ms", "hms", "4q", "4x30", "s30", "m4", "4.5m", "1e3", "0x10",
-    };
+        "m", "h", "s", "ms", "hms", "4q", "4x30", "s30", "m4", "4.5m", "1e3", "0x10"};
     for (const char* input : inputs)
         rejects(input);
 }
@@ -211,15 +210,20 @@ static void testRoundTrip()
         if (badShape < 0 && !wellFormed(n, text))
             badShape = n;
     }
-    check(badRoundTrip < 0, "parse(format(n)) == n for n in 0..400000, first bad n = " + std::to_string(badRoundTrip)
-          + (badRoundTrip < 0 ? "" : " (format gives " + show(timecode::format(badRoundTrip)) + ")"));
-    check(badShape < 0, "format(n) is M:SS below an hour and H:MM:SS from an hour, first bad n = " + std::to_string(badShape)
-          + (badShape < 0 ? "" : " (format gives " + show(timecode::format(badShape)) + ")"));
+    std::string roundTripName = "parse(format(n)) == n for n in 0..400000, first bad n = " + std::to_string(badRoundTrip);
+    if (badRoundTrip >= 0)
+        roundTripName += " (format gives " + show(timecode::format(badRoundTrip)) + ")";
+    check(badRoundTrip < 0, roundTripName);
+
+    std::string shapeName = "format(n) is M:SS below an hour and H:MM:SS from an hour, first bad n = " + std::to_string(badShape);
+    if (badShape >= 0)
+        shapeName += " (format gives " + show(timecode::format(badShape)) + ")";
+    check(badShape < 0, shapeName);
 
     for (int n : {359999, 360000, 3599999, 86400 * 365, 1000000000, INT_MAX - 1, INT_MAX}) {
         std::optional<int> result = timecode::parse(timecode::format(n));
-        check(result && *result == n, "parse(format(" + std::to_string(n) + ")) == n, format gives "
-              + show(timecode::format(n)) + ", parse gives " + show(result));
+        std::string name = "parse(format(" + std::to_string(n) + ")) == n, format gives " + show(timecode::format(n));
+        check(result && *result == n, name + ", parse gives " + show(result));
     }
 }
 

@@ -78,10 +78,10 @@ static bool makeClip(const fs::path& folder)
     if (SearchPathW(nullptr, L"ffmpeg.exe", nullptr, MAX_PATH, ffmpeg, nullptr) == 0)
         return false;
     fs::path file = folder / "clip.mp4";
-    std::wstring command = L"\"" + std::wstring(ffmpeg) + L"\" -hide_banner -loglevel error -y"
-        L" -f lavfi -i testsrc=duration=30:size=320x240:rate=25"
-        L" -f lavfi -i sine=frequency=440:duration=30"
-        L" -af volume=0 -c:v mpeg4 -c:a aac -shortest \"" + file.wstring() + L"\"";
+    std::wstring command = L"\"" + std::wstring(ffmpeg) + L"\" -hide_banner -loglevel error -y";
+    command += L" -f lavfi -i testsrc=duration=30:size=320x240:rate=25";
+    command += L" -f lavfi -i sine=frequency=440:duration=30";
+    command += L" -af volume=0 -c:v mpeg4 -c:a aac -shortest \"" + file.wstring() + L"\"";
     if (!runProcess(command, 120000) || !fs::exists(file))
         return false;
     clip = file.u8string();

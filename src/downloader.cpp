@@ -65,11 +65,12 @@ static std::wstring buildCommand(const std::string& url, const std::filesystem::
 {
     std::wstring output = (folder / L"%(id)s.%(ext)s").wstring();
 
-    return L"yt-dlp --newline --no-playlist --encoding utf-8"
-           L" -f \"bv*[height<=1080]+ba/b\" --merge-output-format mp4"
-           L" --progress --progress-template \"download:progress %(progress._percent_str)s\""
-           L" --print \"after_move:%(.{id,title,duration,chapters,filepath})j\""
-           L" -o \"" + output + L"\" -- \"" + widen(url) + L"\"";
+    std::wstring command = L"yt-dlp --newline --no-playlist --encoding utf-8";
+    command += L" -f \"bv*[height<=1080]+ba/b\" --merge-output-format mp4";
+    command += L" --progress --progress-template \"download:progress %(progress._percent_str)s\"";
+    command += L" --print \"after_move:%(.{id,title,duration,chapters,filepath})j\"";
+    command += L" -o \"" + output + L"\" -- \"" + widen(url) + L"\"";
+    return command;
 }
 
 static int percentOf(const std::string& line)

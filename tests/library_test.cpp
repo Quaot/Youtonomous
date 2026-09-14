@@ -263,8 +263,7 @@ static void testImportChapters()
     Library::importChapters(video, {mark(60, "End", false), mark(0, "Intro", false), mark(30, "Middle", false)});
     std::vector<Bookmark> expected = {
         mark(0, "Intro", true), mark(5, "mine early", false), mark(30, "Middle", true),
-        mark(45, "mine late", false), mark(60, "End", true),
-    };
+        mark(45, "mine late", false), mark(60, "End", true)};
     check(sameMarks(video.marks, expected), "importChapters() adds chapters flagged as chapters, keeps user marks, orders by time, got " + describe(video.marks));
 
     Library::importChapters(video, {mark(10, "New", true)});
@@ -348,9 +347,10 @@ static void testRoundTrip()
     Library loaded(file);
     check(tryLoad(loaded, "round trip"), "load() of a saved library returns true");
     check(loaded.videos().size() == videos.size(), "load() restores every video, got " + std::to_string(loaded.videos().size()));
-    for (size_t i = 0; i < videos.size() && i < loaded.videos().size(); ++i)
-        check(sameVideo(loaded.videos()[i], videos[i]), "video " + std::to_string(i) + " (" + videos[i].id
-              + ") restored with every field, marks " + describe(loaded.videos()[i].marks));
+    for (size_t i = 0; i < videos.size() && i < loaded.videos().size(); ++i) {
+        std::string name = "video " + std::to_string(i) + " (" + videos[i].id + ") restored with every field";
+        check(sameVideo(loaded.videos()[i], videos[i]), name + ", marks " + describe(loaded.videos()[i].marks));
+    }
 
     Video* found = loaded.find("abc123XYZ_-");
     check(found && found->title == videos[0].title, "find() works after load()");
