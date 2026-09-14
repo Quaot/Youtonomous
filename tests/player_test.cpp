@@ -9,13 +9,14 @@
 #include <windows.h>
 
 #include "check.h"
-#include "player.h"
+#include "make_player.h"
 
 namespace fs = std::filesystem;
 using Clock = std::chrono::steady_clock;
 
 static HWND videoWindow;
 static std::string clip;
+static std::string backend = "vlc";
 
 static DWORD WINAPI windowThread(LPVOID created)
 {
@@ -90,7 +91,8 @@ static bool makeClip(const fs::path& folder)
 
 static void testNothingOpen()
 {
-    Player player;
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
     player.attach(videoWindow);
     check(!player.loaded(), "loaded() is false before open");
     check(!player.playing(), "playing() is false before open");
@@ -113,7 +115,8 @@ static void testNothingOpen()
 
 static void testMissingFile(const fs::path& folder)
 {
-    Player player;
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
     player.attach(videoWindow);
     player.open((folder / "does-not-exist" / "missing.mp4").u8string(), 0);
     check(waitFor([&] { return !player.playing(); }, 5000), "a non-existent file does not end up playing");
@@ -142,7 +145,8 @@ static bool startPlaying(Player& player, int start)
 
 static void testOpen()
 {
-    Player player;
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
     Clock::time_point opened = Clock::now();
     player.attach(videoWindow);
     player.open(clip, 0);
@@ -159,7 +163,8 @@ static void testOpen()
 
 static void testOpenAtStart()
 {
-    Player player;
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
     Clock::time_point opened = Clock::now();
     player.attach(videoWindow);
     player.open(clip, 10);
@@ -174,7 +179,8 @@ static void testOpenAtStart()
 
 static void testSeek()
 {
-    Player player;
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
     check(startPlaying(player, 0), "clip plays for the seek tests");
 
     player.seek(20);
@@ -203,7 +209,8 @@ static void testSeek()
 
 static void testSkip()
 {
-    Player player;
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
     check(startPlaying(player, 10), "clip plays for the skip tests");
     waitFor([&] { return player.time() >= 10; }, 5000);
 
@@ -234,7 +241,8 @@ static void testSkip()
 
 static void testPause()
 {
-    Player player;
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
     check(startPlaying(player, 0), "clip plays for the pause tests");
     waitFor([&] { return player.time() >= 1; }, 5000);
 
@@ -253,7 +261,8 @@ static void testPause()
 
 static void testReopen(const fs::path& folder)
 {
-    Player player;
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
     player.attach(videoWindow);
     player.open((folder / "missing.mp4").u8string(), 0);
     Sleep(1000);
@@ -267,8 +276,15 @@ static void testReopen(const fs::path& folder)
           "opening the clip again at 5 restarts at 5, got " + num(player.time()));
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc > 1)
+        backend = argv[1];
+    if (!makePlayer(backend)) {
+        std::printf("unknown backend: %s\n", backend.c_str());
+        return 2;
+    }
+
     HANDLE created = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     DWORD threadId = 0;
     HANDLE thread = CreateThread(nullptr, 0, windowThread, created, 0, &threadId);
@@ -282,11 +298,7 @@ int main()
 
     int result = 0;
     testNothingOpen();
-    bool ready = false;
-    {
-        Player player;
-        ready = player.ready();
-    }
+    bool ready = makePlayer(backend)->ready();
     if (!ready) {
         std::printf("SKIP: VLC did not start\n");
         result = failCount > 0 ? report() : 77;

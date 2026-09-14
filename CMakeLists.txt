@@ -16,11 +16,17 @@ add_library(core STATIC
 target_include_directories(core PUBLIC src)
 target_link_libraries(core PUBLIC nlohmann_json::nlohmann_json)
 
+add_library(players STATIC
+    src/player/vlc_player.cpp
+    src/player/make_player.cpp
+)
+target_include_directories(players PUBLIC src/player)
+target_link_libraries(players PUBLIC vlc)
+
 configure_file(packaging/app.rc.in app.rc @ONLY)
 
 add_executable(youtonomous WIN32
     src/main.cpp
-    src/player.cpp
     src/downloader.cpp
     src/ui/controls.cpp
     src/ui/library_panel.cpp
@@ -31,7 +37,7 @@ add_executable(youtonomous WIN32
     ${CMAKE_CURRENT_BINARY_DIR}/app.rc
 )
 target_include_directories(youtonomous PRIVATE src/ui)
-target_link_libraries(youtonomous PRIVATE core vlc comdlg32 comctl32)
+target_link_libraries(youtonomous PRIVATE core players comdlg32 comctl32)
 target_link_options(youtonomous PRIVATE -municode)
 
 enable_testing()
@@ -53,10 +59,10 @@ target_include_directories(seekbar_test PRIVATE src/ui)
 target_link_libraries(seekbar_test PRIVATE core comctl32)
 add_test(NAME seekbar COMMAND seekbar_test)
 
-add_executable(player_test tests/player_test.cpp src/player.cpp)
-target_link_libraries(player_test PRIVATE core vlc)
-add_test(NAME player COMMAND player_test)
-set_tests_properties(player PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+add_executable(player_test tests/player_test.cpp)
+target_link_libraries(player_test PRIVATE core players)
+add_test(NAME player_vlc COMMAND player_test vlc)
+set_tests_properties(player_vlc PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
 
 add_executable(downloader_test tests/downloader_test.cpp src/downloader.cpp)
 target_link_libraries(downloader_test PRIVATE core)

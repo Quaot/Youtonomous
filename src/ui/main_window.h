@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <string>
 
 #include <windows.h>
@@ -8,8 +9,8 @@
 #include "downloader.h"
 #include "library.h"
 #include "library_panel.h"
+#include "make_player.h"
 #include "marks_panel.h"
-#include "player.h"
 #include "player_panel.h"
 
 class MainWindow {
@@ -57,7 +58,7 @@ private:
 
     std::filesystem::path videosFolder_;
     Library library_;
-    Player player_;
+    std::unique_ptr<Player> player_ = makePlayer("vlc");
     std::string currentId_;
     bool downloading_ = false;
 };

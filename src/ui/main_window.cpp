@@ -81,7 +81,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
         library_.load();
         refreshLibrary();
         SetTimer(hwnd_, kTimer, 250, nullptr);
-        if (!player_.ready())
+        if (!player_->ready())
             MessageBoxW(hwnd_, L"Could not start VLC.", L"Youtonomous", MB_ICONERROR);
         return 0;
     case WM_SIZE:
@@ -94,7 +94,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM wParam, LPARAM lParam)
         tick();
         return 0;
     case WM_SEEKBAR_SEEK:
-        player_.seek(static_cast<int>(wParam));
+        player_->seek(static_cast<int>(wParam));
         tick();
         return 0;
     case WM_LBUTTONDOWN:
@@ -128,7 +128,7 @@ void MainWindow::createControls()
     playerPanel_.create(context);
     marksPanel_.create(context);
 
-    player_.attach(playerPanel_.videoWindow());
+    player_->attach(playerPanel_.videoWindow());
 }
 
 void MainWindow::layout(int width, int height)
@@ -145,11 +145,11 @@ void MainWindow::onCommand(int id, int code)
     case kRemove: removeSelected(); break;
     case kDownload: download(); break;
     case kPrevMark: jumpMark(-1); break;
-    case kBack30: player_.skip(-30); break;
-    case kBack10: player_.skip(-10); break;
-    case kPlay: player_.togglePause(); break;
-    case kForward10: player_.skip(10); break;
-    case kForward30: player_.skip(30); break;
+    case kBack30: player_->skip(-30); break;
+    case kBack10: player_->skip(-10); break;
+    case kPlay: player_->togglePause(); break;
+    case kForward10: player_->skip(10); break;
+    case kForward30: player_->skip(30); break;
     case kNextMark: jumpMark(1); break;
     case kSetStart: saveStartFromBox(); break;
     case kGoStart: goToStart(); break;
@@ -175,7 +175,7 @@ void MainWindow::onCommand(int id, int code)
 
 void MainWindow::tick()
 {
-    playerPanel_.show(player_.time(), player_.length(), player_.playing());
+    playerPanel_.show(player_->time(), player_->length(), player_->playing());
 }
 
 void MainWindow::openFile()
@@ -289,7 +289,7 @@ void MainWindow::openVideo(const std::string& id)
     }
 
     currentId_ = id;
-    player_.open(found->file, found->start);
+    player_->open(found->file, found->start);
     libraryPanel_.select(static_cast<int>(found - videos.begin()));
     SetWindowTextW(hwnd_, (L"Youtonomous - " + widen(found->title)).c_str());
     refreshMarks();
@@ -331,14 +331,14 @@ void MainWindow::refreshMarks()
 void MainWindow::addMark()
 {
     Video* video = current();
-    if (!video || !player_.loaded())
+    if (!video || !player_->loaded())
         return;
 
     std::string label = marksPanel_.takeLabel();
     if (label.empty())
         label = "Bookmark";
 
-    Library::addMark(*video, {player_.time(), label, false});
+    Library::addMark(*video, {player_->time(), label, false});
     library_.save();
     refreshMarks();
 }
@@ -366,7 +366,7 @@ void MainWindow::jumpToSelectedMark()
 
     int index = marksPanel_.selected(video->marks.size());
     if (index >= 0)
-        player_.seek(video->marks[index].time);
+        player_->seek(video->marks[index].time);
 }
 
 void MainWindow::jumpMark(int direction)
@@ -376,19 +376,19 @@ void MainWindow::jumpMark(int direction)
         return;
 
     const auto& marks = video->marks;
-    int now = player_.time();
+    int now = player_->time();
 
     if (direction > 0) {
         auto next = std::find_if(marks.begin(), marks.end(), [&](const Bookmark& mark) { return mark.time > now; });
         if (next != marks.end())
-            player_.seek(next->time);
+            player_->seek(next->time);
         return;
     }
 
     // The grace period lets repeated presses walk back past the mark just reached.
     auto previous = std::find_if(marks.rbegin(), marks.rend(), [&](const Bookmark& mark) { return mark.time < now - 2; });
     if (previous != marks.rend())
-        player_.seek(previous->time);
+        player_->seek(previous->time);
 }
 
 void MainWindow::saveStartFromBox()
@@ -412,7 +412,7 @@ void MainWindow::setStart(int seconds)
     if (!video)
         return;
 
-    int length = player_.length();
+    int length = player_->length();
     if (length > 0)
         seconds = std::min(seconds, length - 1);
 
@@ -424,7 +424,7 @@ void MainWindow::setStart(int seconds)
 void MainWindow::goToStart()
 {
     if (Video* video = current())
-        player_.seek(video->start);
+        player_->seek(video->start);
 }
 
 bool MainWindow::handleKey(const MSG& msg)
@@ -453,13 +453,13 @@ bool MainWindow::handleKey(const MSG& msg)
     bool shift = GetKeyState(VK_SHIFT) < 0;
 
     switch (msg.wParam) {
-    case VK_SPACE: player_.togglePause(); break;
-    case VK_LEFT: player_.skip(shift ? -60 : -10); break;
-    case VK_RIGHT: player_.skip(shift ? 60 : 10); break;
+    case VK_SPACE: player_->togglePause(); break;
+    case VK_LEFT: player_->skip(shift ? -60 : -10); break;
+    case VK_RIGHT: player_->skip(shift ? 60 : 10); break;
     case VK_OEM_4: jumpMark(-1); break;
     case VK_OEM_6: jumpMark(1); break;
     case 'B': addMark(); break;
-    case 'S': setStart(player_.time()); break;
+    case 'S': setStart(player_->time()); break;
     case VK_HOME: goToStart(); break;
     default: return false;
     }
