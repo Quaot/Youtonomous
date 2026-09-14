@@ -1,4 +1,4 @@
-# Youtonomous
+# youtonomous
 
 Long YouTube videos often open with minutes of chatter. Youtonomous downloads a video once, remembers where the real content starts and opens it there every time. Bookmarks let you jump around.
 
