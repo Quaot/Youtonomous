@@ -26,7 +26,7 @@ jobs:
             mingw-w64-ucrt-x86_64-clang-tools-extra
 
       - name: Check formatting
-        run: clang-format --dry-run --Werror src/*.cpp src/*.h tests/*.cpp tests/*.h
+        run: find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
@@ -35,4 +35,4 @@ jobs:
         run: cmake --build build
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure -E "player|downloader"
+        run: ctest --test-dir build --output-on-failure -E "player|downloader|ui_smoke"

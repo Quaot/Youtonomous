@@ -1,6 +1,6 @@
 #include <windows.h>
 
-#include "window.h"
+#include "main_window.h"
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
 {

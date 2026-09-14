@@ -18,12 +18,17 @@ target_link_libraries(core PUBLIC nlohmann_json::nlohmann_json)
 
 add_executable(youtonomous WIN32
     src/main.cpp
-    src/window.cpp
     src/player.cpp
-    src/seekbar.cpp
     src/downloader.cpp
+    src/ui/controls.cpp
+    src/ui/library_panel.cpp
+    src/ui/player_panel.cpp
+    src/ui/marks_panel.cpp
+    src/ui/main_window.cpp
+    src/ui/seekbar.cpp
     src/app.rc
 )
+target_include_directories(youtonomous PRIVATE src/ui)
 target_link_libraries(youtonomous PRIVATE core vlc comdlg32 comctl32)
 target_link_options(youtonomous PRIVATE -municode)
 
@@ -41,7 +46,8 @@ add_executable(text_test tests/text_test.cpp)
 target_include_directories(text_test PRIVATE src)
 add_test(NAME text COMMAND text_test)
 
-add_executable(seekbar_test tests/seekbar_test.cpp src/seekbar.cpp)
+add_executable(seekbar_test tests/seekbar_test.cpp src/ui/seekbar.cpp)
+target_include_directories(seekbar_test PRIVATE src/ui)
 target_link_libraries(seekbar_test PRIVATE core comctl32)
 add_test(NAME seekbar COMMAND seekbar_test)
 
@@ -54,3 +60,8 @@ add_executable(downloader_test tests/downloader_test.cpp src/downloader.cpp)
 target_link_libraries(downloader_test PRIVATE core)
 add_test(NAME downloader COMMAND downloader_test)
 set_tests_properties(downloader PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+
+add_executable(ui_smoke_test tests/ui_smoke_test.cpp)
+target_link_libraries(ui_smoke_test PRIVATE core)
+add_test(NAME ui_smoke COMMAND ui_smoke_test $<TARGET_FILE:youtonomous>)
+set_tests_properties(ui_smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
