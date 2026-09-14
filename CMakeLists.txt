@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Youtonomous CXX RC)
+project(Youtonomous VERSION 0.2.0 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,6 +16,8 @@ add_library(core STATIC
 target_include_directories(core PUBLIC src)
 target_link_libraries(core PUBLIC nlohmann_json::nlohmann_json)
 
+configure_file(packaging/app.rc.in app.rc @ONLY)
+
 add_executable(youtonomous WIN32
     src/main.cpp
     src/player.cpp
@@ -26,7 +28,7 @@ add_executable(youtonomous WIN32
     src/ui/marks_panel.cpp
     src/ui/main_window.cpp
     src/ui/seekbar.cpp
-    src/app.rc
+    ${CMAKE_CURRENT_BINARY_DIR}/app.rc
 )
 target_include_directories(youtonomous PRIVATE src/ui)
 target_link_libraries(youtonomous PRIVATE core vlc comdlg32 comctl32)

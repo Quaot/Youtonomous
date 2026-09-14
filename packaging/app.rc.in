@@ -1,0 +1,30 @@
+#include <windows.h>
+
+1 ICON "@PROJECT_SOURCE_DIR@/packaging/app.ico"
+1 24 "@PROJECT_SOURCE_DIR@/src/app.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Justin Gu"
+            VALUE "FileDescription", "Youtonomous"
+            VALUE "FileVersion", "@PROJECT_VERSION@"
+            VALUE "InternalName", "youtonomous"
+            VALUE "LegalCopyright", "Copyright (c) 2026 Justin Gu"
+            VALUE "OriginalFilename", "youtonomous.exe"
+            VALUE "ProductName", "Youtonomous"
+            VALUE "ProductVersion", "@PROJECT_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

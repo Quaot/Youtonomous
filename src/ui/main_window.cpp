@@ -43,6 +43,9 @@ bool MainWindow::create(HINSTANCE instance, int show)
     wc.lpfnWndProc = proc;
     wc.hInstance = instance;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(1));
+    wc.hIconSm = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON,
+                                               GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
     wc.hbrBackground = GetSysColorBrush(COLOR_BTNFACE);
     wc.lpszClassName = L"Youtonomous";
     RegisterClassExW(&wc);
