@@ -1,6 +1,7 @@
 #include "library.h"
 
 #include <algorithm>
+#include <climits>
 #include <fstream>
 
 #include <nlohmann/json.hpp>
@@ -26,8 +27,17 @@ static json toJson(const Video& video)
         {"file", video.file},
         {"duration", video.duration},
         {"start", video.start},
+        {"position", video.position},
         {"marks", marks},
     };
+}
+
+static int readPosition(const json& item)
+{
+    if (!item.contains("position") || !item["position"].is_number_integer())
+        return 0;
+    long long position = item["position"].get<long long>();
+    return position > 0 && position <= INT_MAX ? static_cast<int>(position) : 0;
 }
 
 static Video fromJson(const json& item)
@@ -39,6 +49,7 @@ static Video fromJson(const json& item)
     video.file = item.value("file", "");
     video.duration = item.value("duration", 0);
     video.start = item.value("start", 0);
+    video.position = readPosition(item);
 
     for (const json& mark : item.value("marks", json::array()))
         video.marks.push_back({mark.value("time", 0), mark.value("label", ""), mark.value("chapter", false)});

@@ -15,6 +15,7 @@ public:
 
     void show(const Video* video);
     void showStart(int seconds);
+    void showStoppedAt(int seconds);
     std::string startText() const;
     std::string takeLabel();
     int selected(size_t count) const;
@@ -27,6 +28,7 @@ private:
     HWND start_edit_ = nullptr;
     HWND set_start_button_ = nullptr;
     HWND go_start_button_ = nullptr;
+    HWND resume_button_ = nullptr;
 
     HWND marks_label_ = nullptr;
     HWND list_ = nullptr;

@@ -17,6 +17,7 @@ struct Video {
     std::string file;
     int duration = 0;
     int start = 0;
+    int position = 0;
     std::vector<Bookmark> marks;
 };
 

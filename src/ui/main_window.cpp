@@ -201,6 +201,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
         onDownloadDone(reinterpret_cast<DownloadResult*>(l_param));
         return 0;
     case WM_DESTROY:
+        rememberPosition();
         saveSettingsOnClose();
         KillTimer(hwnd_, kTimer);
         DeleteObject(font_);
@@ -251,6 +252,7 @@ void MainWindow::onCommand(int id, int code)
     case kNextMark: jumpMark(1); break;
     case kSetStart: saveStartFromBox(); break;
     case kGoStart: goToStart(); break;
+    case kResume: resume(); break;
     case kAddMark: addMark(); break;
     case kDeleteMark: deleteSelectedMark(); break;
     case kSpeed:
@@ -382,9 +384,8 @@ void MainWindow::refreshLibrary()
 
 void MainWindow::openVideo(const std::string& id)
 {
-    const auto& videos = library_.videos();
-    auto found = std::find_if(videos.begin(), videos.end(), [&](const Video& video) { return video.id == id; });
-    if (found == videos.end())
+    Video* found = library_.find(id);
+    if (!found)
         return;
 
     std::error_code error;
@@ -394,9 +395,15 @@ void MainWindow::openVideo(const std::string& id)
         return;
     }
 
+    rememberPosition();
     current_id_ = id;
     player_->open(found->file, found->start);
-    library_panel_.select(static_cast<int>(found - videos.begin()));
+
+    const auto& videos = library_.videos();
+    for (size_t i = 0; i < videos.size(); ++i) {
+        if (videos[i].id == id)
+            library_panel_.select(static_cast<int>(i));
+    }
     SetWindowTextW(hwnd_, (L"Youtonomous - " + widen(found->title)).c_str());
     refreshMarks();
 }
@@ -428,10 +435,13 @@ void MainWindow::refreshMarks()
 {
     Video* video = current();
     marks_panel_.show(video);
-    if (video)
+    if (video) {
         player_panel_.showMarks(video->marks, video->start);
-    else
+        marks_panel_.showStoppedAt(video->position > video->start + 5 ? video->position : 0);
+    } else {
         player_panel_.showMarks({}, 0);
+        marks_panel_.showStoppedAt(0);
+    }
 }
 
 void MainWindow::addMark()
@@ -539,6 +549,29 @@ void MainWindow::changeSpeed(double step)
     player_panel_.showSpeed(player_->speed());
 }
 
+void MainWindow::rememberPosition()
+{
+    Video* video = current();
+    if (!video || !player_->loaded())
+        return;
+
+    int time = player_->time();
+    int length = player_->length();
+    bool finished = length > 0 && time >= length - 5;
+    if (time <= 0 && !finished)
+        return;
+
+    video->position = finished ? 0 : time;
+    library_.save();
+}
+
+void MainWindow::resume()
+{
+    Video* video = current();
+    if (video && video->position > 0)
+        player_->seek(video->position);
+}
+
 bool MainWindow::handleKey(const MSG& msg)
 {
     if (msg.message != WM_KEYDOWN || (msg.hwnd != hwnd_ && !IsChild(hwnd_, msg.hwnd)))
@@ -574,6 +607,7 @@ bool MainWindow::handleKey(const MSG& msg)
     case VK_OEM_PLUS: changeSpeed(0.25); break;
     case 'B': addMark(); break;
     case 'S': setStart(player_->time()); break;
+    case 'R': resume(); break;
     case 'F': setFullscreen(!fullscreen_); break;
     case VK_HOME: goToStart(); break;
     case VK_ESCAPE:

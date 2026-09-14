@@ -52,6 +52,8 @@ private:
     void goToStart();
 
     void changeSpeed(double step);
+    void rememberPosition();
+    void resume();
 
     HWND hwnd_ = nullptr;
     HINSTANCE instance_ = nullptr;

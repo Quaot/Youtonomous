@@ -4,6 +4,7 @@
 #include <iterator>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include <windows.h>
@@ -84,7 +85,7 @@ static bool sameMarks(const std::vector<Bookmark>& a, const std::vector<Bookmark
 static bool sameVideo(const Video& a, const Video& b)
 {
     return a.id == b.id && a.url == b.url && a.title == b.title && a.file == b.file
-        && a.duration == b.duration && a.start == b.start && sameMarks(a.marks, b.marks);
+        && a.duration == b.duration && a.start == b.start && a.position == b.position && sameMarks(a.marks, b.marks);
 }
 
 static std::string ids(const Library& library)
@@ -312,6 +313,7 @@ static std::vector<Video> sampleVideos()
     full.file = "C:\\Users\\Test\\Videos\\Youtonomous\\caf\xC3\xA9 \xE6\x97\xA5\xE6\x9C\xAC.mp4";
     full.duration = 5025;
     full.start = 97;
+    full.position = 1800;
     full.marks = {
         mark(0, "Intro", true),
         mark(97, "Real start \"quoted\" \\ back/slash", false),
@@ -327,6 +329,7 @@ static std::vector<Video> sampleVideos()
     Video large = makeVideo("large", "\xF0\x9F\x8E\xAC Large");
     large.duration = INT_MAX;
     large.start = INT_MAX - 1;
+    large.position = INT_MAX;
     large.marks = {mark(INT_MAX, "end", true)};
 
     return {full, minimal, large};
@@ -558,6 +561,7 @@ static void testManyVideos()
         Video video = makeVideo("v" + std::to_string((i * 7919) % 300), "Video " + std::to_string(i));
         video.duration = i * 13;
         video.start = i;
+        video.position = i * 11;
         for (int j = 0; j < 20; ++j)
             Library::addMark(video, mark((j * 37) % 20 * 10, "m" + std::to_string(j), j % 3 == 0));
         library.add(video);
@@ -572,6 +576,241 @@ static void testManyVideos()
     for (size_t i = 0; same && i < added.size(); ++i)
         same = sameVideo(loaded.videos()[i], added[i]);
     check(same, "300 videos with 20 marks each round-trip in insertion order");
+}
+
+static std::string positions(const Library& library)
+{
+    std::string result;
+    for (const Video& video : library.videos())
+        result += (result.empty() ? "" : ",") + video.id + "=" + std::to_string(video.position);
+    return result;
+}
+
+static std::string describeVideo(const Video& video)
+{
+    return "id " + video.id + ", url " + video.url + ", title " + video.title + ", file " + video.file
+         + ", duration " + std::to_string(video.duration) + ", start " + std::to_string(video.start)
+         + ", position " + std::to_string(video.position) + ", marks " + describe(video.marks);
+}
+
+static void testPositionDefault()
+{
+    Video video;
+    check(video.position == 0, "a new Video has position 0, got " + std::to_string(video.position));
+    Video made = makeVideo("d", "D");
+    check(made.position == 0, "a video without a set position has position 0, got " + std::to_string(made.position));
+}
+
+static void testPositionRoundTrip()
+{
+    fs::path file = root / "position-roundtrip" / "library.json";
+    std::vector<int> values = {0, 1, 59, 599, 600, INT_MAX - 1, INT_MAX};
+    std::vector<Video> added;
+    Library library(file);
+    for (size_t i = 0; i < values.size(); ++i) {
+        Video video = makeVideo("p" + std::to_string(i), "Position " + std::to_string(values[i]));
+        video.position = values[i];
+        library.add(video);
+        added.push_back(video);
+    }
+    check(trySave(library, "position round trip"), "save() of videos with positions returns true");
+
+    Library loaded(file);
+    check(tryLoad(loaded, "position round trip"), "load() of videos with positions returns true");
+    check(loaded.videos().size() == added.size(), "load() restores every video with a position, got " + ids(loaded));
+    for (size_t i = 0; i < added.size() && i < loaded.videos().size(); ++i) {
+        const Video& got = loaded.videos()[i];
+        check(got.position == added[i].position, "position " + std::to_string(added[i].position) + " round-trips exactly, got " + std::to_string(got.position));
+        check(sameVideo(got, added[i]), "video with position " + std::to_string(added[i].position) + " round-trips every field, got " + describeVideo(got));
+    }
+
+    check(trySave(loaded, "position resave"), "save() of a loaded library with positions returns true");
+    Library again(file);
+    tryLoad(again, "position reload");
+    bool same = again.videos().size() == added.size();
+    for (size_t i = 0; same && i < added.size(); ++i)
+        same = sameVideo(again.videos()[i], added[i]);
+    check(same, "load, save, load keeps every position, got " + positions(again));
+}
+
+static nlohmann::json savedJson(const fs::path& file, const std::vector<Video>& videos, const std::string& name)
+{
+    Library library(file);
+    for (const Video& video : videos)
+        library.add(video);
+    check(trySave(library, name), "save() returns true for " + name);
+    nlohmann::json result;
+    try {
+        result = nlohmann::json::parse(readFile(file));
+    } catch (...) {
+        result = nlohmann::json();
+    }
+    bool shaped = result.is_array() && result.size() == videos.size();
+    for (size_t i = 0; shaped && i < result.size(); ++i)
+        shaped = result[i].is_object() && result[i].contains("position");
+    check(shaped, "saved file is an array of video objects with a \"position\" key for " + name + ", got " + result.dump());
+    return shaped ? result : nlohmann::json();
+}
+
+static void loadExpects(const fs::path& file, const nlohmann::json& content, const std::vector<Video>& expected, const std::string& name)
+{
+    writeFile(file, content.dump());
+    Library library(file);
+    check(tryLoad(library, name), "load() returns true for " + name);
+    check(library.videos().size() == expected.size(), "load() keeps every video for " + name + ", got " + ids(library));
+    for (size_t i = 0; i < expected.size() && i < library.videos().size(); ++i) {
+        const Video& got = library.videos()[i];
+        check(sameVideo(got, expected[i]), name + ": video " + expected[i].id + " loads with position " + std::to_string(expected[i].position)
+                                               + " and every other field, got " + describeVideo(got));
+    }
+}
+
+static Video positionedVideo(const std::string& id, int position)
+{
+    Video video = makeVideo(id, "Title " + id);
+    video.duration = 900;
+    video.start = 12;
+    video.position = position;
+    video.marks = {mark(0, "Intro", true), mark(45, "mine", false)};
+    return video;
+}
+
+static void testPositionMissingKey()
+{
+    fs::path file = root / "position-missing" / "library.json";
+    Video first = positionedVideo("first", 250);
+    Video second = positionedVideo("second", 77);
+    nlohmann::json saved = savedJson(file, {first, second}, "missing position setup");
+    if (saved.is_null())
+        return;
+
+    nlohmann::json old_style = saved;
+    for (nlohmann::json& entry : old_style)
+        entry.erase("position");
+    Video old_first = first;
+    old_first.position = 0;
+    Video old_second = second;
+    old_second.position = 0;
+    loadExpects(file, old_style, {old_first, old_second}, "a file without \"position\" keys");
+
+    nlohmann::json mixed = saved;
+    mixed[0].erase("position");
+    loadExpects(file, mixed, {old_first, second}, "a file where only one video lacks \"position\"");
+}
+
+static void testPositionWrongType()
+{
+    fs::path file = root / "position-type" / "library.json";
+    Video first = positionedVideo("first", 250);
+    Video second = positionedVideo("second", 77);
+    nlohmann::json saved = savedJson(file, {first, second}, "wrong type position setup");
+    if (saved.is_null())
+        return;
+
+    Video zeroed = first;
+    zeroed.position = 0;
+    std::vector<std::pair<std::string, nlohmann::json>> cases = {
+        {"a string position \"12\"", nlohmann::json("12")},
+        {"an empty string position", nlohmann::json("")},
+        {"a null position", nlohmann::json(nullptr)},
+        {"a true position", nlohmann::json(true)},
+        {"a false position", nlohmann::json(false)},
+        {"an array position [12]", nlohmann::json::array({12})},
+        {"an empty array position", nlohmann::json::array()},
+        {"an object position", nlohmann::json::object({{"seconds", 12}})},
+        {"a position of -1", nlohmann::json(-1)},
+        {"a position of -600", nlohmann::json(-600)},
+        {"a position of INT_MIN", nlohmann::json(INT_MIN)},
+    };
+    for (const auto& [name, value] : cases) {
+        nlohmann::json edited = saved;
+        edited[0]["position"] = value;
+        loadExpects(file, edited, {zeroed, second}, name);
+    }
+
+    nlohmann::json floating = saved;
+    floating[0]["position"] = 12.5;
+    writeFile(file, floating.dump());
+    Library library(file);
+    check(tryLoad(library, "a float position"), "load() returns true for a float position 12.5");
+    check(library.videos().size() == 2, "load() keeps every video for a float position, got " + ids(library));
+    if (library.videos().size() == 2) {
+        Video got = library.videos()[0];
+        check(got.position == 0 || got.position == 12, "float position 12.5 loads as 0 or 12, got " + std::to_string(got.position));
+        got.position = 0;
+        check(sameVideo(got, zeroed), "float position 12.5 leaves the other fields loaded, got " + describeVideo(library.videos()[0]));
+        check(sameVideo(library.videos()[1], second), "float position in one video leaves the next video alone, got " + describeVideo(library.videos()[1]));
+    }
+}
+
+static void testPositionReplace()
+{
+    Library library(root / "unused" / "library.json");
+    library.add(positionedVideo("a", 300));
+    library.add(positionedVideo("b", 40));
+
+    Video cleared = positionedVideo("a", 0);
+    cleared.title = "Cleared";
+    library.add(cleared);
+    Video* a = library.find("a");
+    check(a && a->position == 0, "add() with an existing id replaces a position of 300 with 0, got " + (a ? std::to_string(a->position) : std::string("missing")));
+    check(a && sameVideo(*a, cleared), "add() with an existing id replaces the whole video when position is 0");
+
+    Video moved = positionedVideo("a", 45);
+    library.add(moved);
+    a = library.find("a");
+    check(a && a->position == 45, "add() with an existing id replaces position 0 with 45, got " + (a ? std::to_string(a->position) : std::string("missing")));
+
+    Video* b = library.find("b");
+    check(b && b->position == 40, "replacing a does not change the position of b, got " + (b ? std::to_string(b->position) : std::string("missing")));
+    check(library.videos().size() == 2, "replacing by id keeps two videos, got " + positions(library));
+}
+
+static void testPositionMarks()
+{
+    Video video = makeVideo("v", "V");
+    video.position = 321;
+    Library::addMark(video, mark(10, "ten", false));
+    check(video.position == 321, "addMark() leaves position 321 alone, got " + std::to_string(video.position));
+    Library::addMark(video, mark(500, "past position", false));
+    check(video.position == 321, "addMark() after the position leaves position 321 alone, got " + std::to_string(video.position));
+    Library::importChapters(video, {mark(0, "Intro", false), mark(400, "Later", false)});
+    check(video.position == 321, "importChapters() leaves position 321 alone, got " + std::to_string(video.position));
+    Library::importChapters(video, {});
+    check(video.position == 321, "importChapters() with no chapters leaves position 321 alone, got " + std::to_string(video.position));
+
+    Video unwatched = makeVideo("u", "U");
+    Library::addMark(unwatched, mark(90, "mark", false));
+    Library::importChapters(unwatched, {mark(60, "Chapter", false)});
+    check(unwatched.position == 0, "addMark() and importChapters() leave position 0 alone, got " + std::to_string(unwatched.position));
+}
+
+static void testPositionThroughFind()
+{
+    fs::path file = root / "position-find" / "library.json";
+    Library library(file);
+    library.add(makeVideo("a", "A"));
+    library.add(positionedVideo("b", 700));
+    trySave(library, "position find setup");
+
+    Library loaded(file);
+    tryLoad(loaded, "position find");
+    Video* a = loaded.find("a");
+    if (a)
+        a->position = 480;
+    Video* b = loaded.find("b");
+    if (b)
+        b->position = 0;
+    check(trySave(loaded, "position find save"), "save() after setting positions through find() returns true");
+
+    Library reloaded(file);
+    check(tryLoad(reloaded, "position find reload"), "load() after setting positions through find() returns true");
+    Video* reloaded_a = reloaded.find("a");
+    check(reloaded_a && reloaded_a->position == 480, "position 480 set through find() is saved, got " + positions(reloaded));
+    Video* reloaded_b = reloaded.find("b");
+    check(reloaded_b && reloaded_b->position == 0, "position reset to 0 through find() is saved, got " + positions(reloaded));
+    check(reloaded_b && reloaded_b->start == 12 && reloaded_b->duration == 900 && reloaded_b->marks.size() == 2,
+          "setting position through find() leaves the other saved fields alone, got " + (reloaded_b ? describeVideo(*reloaded_b) : std::string("missing")));
 }
 
 int main()
@@ -598,6 +837,13 @@ int main()
     testInvalidFiles();
     testSaveFailure();
     testManyVideos();
+    testPositionDefault();
+    testPositionRoundTrip();
+    testPositionMissingKey();
+    testPositionWrongType();
+    testPositionReplace();
+    testPositionMarks();
+    testPositionThroughFind();
 
     fs::remove_all(root, error);
     return report();

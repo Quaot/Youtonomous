@@ -178,6 +178,16 @@ static int playbackTime(HWND top)
     return -1;
 }
 
+static std::wstring labelStartingWith(HWND top, const std::wstring& prefix)
+{
+    for (HWND hwnd : children(top, L"Static")) {
+        std::wstring text = textOf(hwnd);
+        if (text.rfind(prefix, 0) == 0)
+            return text;
+    }
+    return L"";
+}
+
 static int markCount(HWND top)
 {
     std::vector<HWND> lists = children(top, L"ListBox");
@@ -297,6 +307,8 @@ static void firstRun(const std::wstring& command_line, std::wstring& environment
         check(waitFor([&] { return savedVideo(library_file).value("start", -1) == 20; }, 3000), "Set saves the start point");
     }
 
+    check(labelStartingWith(top, L"Start at") == L"Start at", "the start label shows no stopped time on a first watch");
+
     key(top, VK_HOME);
     check(waitFor([&] { return within(playbackTime(top), 20, 21); }, 5000), "Home goes to the start point" + got(playbackTime(top)));
     key(top, VK_RIGHT);
@@ -317,8 +329,11 @@ static void firstRun(const std::wstring& command_line, std::wstring& environment
     check(closeApp(process, top), "app closes cleanly");
 }
 
-static void secondRun(const std::wstring& command_line, std::wstring& environment)
+static void secondRun(const std::wstring& command_line, std::wstring& environment, const fs::path& library_file)
 {
+    int stopped = savedVideo(library_file).value("position", 0);
+    check(within(stopped, 30, 39), "closing remembers where playback stopped" + got(stopped));
+
     PROCESS_INFORMATION process{};
     check(launch(command_line, &environment, process), "app starts again");
     HWND top = nullptr;
@@ -339,6 +354,11 @@ static void secondRun(const std::wstring& command_line, std::wstring& environmen
     check(waitFor([&] { return markCount(top) >= 2; }, 3000), "bookmarks survive a restart" + got(markCount(top)));
     check(speedShown(top) == L"1.5x", "the saved speed is shown after a restart");
     check(volumeShown(top) == 40, "the saved volume is shown after a restart" + got(volumeShown(top)));
+
+    std::wstring start_label = labelStartingWith(top, L"Start at");
+    check(start_label.find(L"last stopped at") != std::wstring::npos, "the start label shows where playback stopped");
+    key(top, 'R');
+    check(waitFor([&] { return within(playbackTime(top), stopped - 1, stopped + 4); }, 5000), "R resumes where playback stopped" + got(playbackTime(top)));
 
     MONITORINFO monitor{};
     monitor.cbSize = sizeof monitor;
@@ -404,7 +424,7 @@ int main(int argc, char** argv)
     settings["maximized"] = false;
     std::ofstream(settings_file) << settings.dump();
 
-    secondRun(command_line, environment);
+    secondRun(command_line, environment, library_file);
 
     nlohmann::json after = readJson(settings_file);
     check(after.value("window_x", -1) == 50 && after.value("window_width", 0) == 1000, "settings are saved again on close");

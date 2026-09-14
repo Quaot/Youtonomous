@@ -30,6 +30,7 @@ enum ControlId {
     kSpeed,
     kVolume,
     kVideo,
+    kResume,
 };
 
 const int kPad = 8;
