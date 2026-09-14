@@ -49,6 +49,11 @@ void MarksPanel::layout(int width, int height)
     MoveWindow(delete_button_, left, bottom, kSide, kRow, TRUE);
 }
 
+void MarksPanel::setVisible(bool visible)
+{
+    ui::setVisible({start_label_, start_edit_, set_start_button_, go_start_button_, marks_label_, list_, label_edit_, add_button_, delete_button_}, visible);
+}
+
 void MarksPanel::show(const Video* video)
 {
     SendMessageW(list_, LB_RESETCONTENT, 0, 0);

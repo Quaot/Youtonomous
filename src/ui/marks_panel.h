@@ -11,6 +11,7 @@ class MarksPanel {
 public:
     void create(const ui::Context& context);
     void layout(int width, int height);
+    void setVisible(bool visible);
 
     void show(const Video* video);
     void showStart(int seconds);

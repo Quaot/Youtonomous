@@ -12,6 +12,7 @@ class LibraryPanel {
 public:
     void create(const ui::Context& context);
     void layout(int height);
+    void setVisible(bool visible);
 
     std::string url() const;
     void clearUrl();

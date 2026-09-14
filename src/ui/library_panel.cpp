@@ -44,6 +44,11 @@ void LibraryPanel::layout(int height)
     MoveWindow(remove_button_, kPad + half + kGap, bottom, half, kRow, TRUE);
 }
 
+void LibraryPanel::setVisible(bool visible)
+{
+    ui::setVisible({url_edit_, download_button_, progress_, status_, label_, list_, open_button_, remove_button_}, visible);
+}
+
 std::string LibraryPanel::url() const
 {
     return trim(narrow(textOf(url_edit_)));

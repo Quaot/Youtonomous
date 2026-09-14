@@ -11,6 +11,7 @@ class PlayerPanel {
 public:
     void create(const ui::Context& context);
     void layout(int width, int height);
+    void setFullscreen(bool fullscreen);
 
     HWND videoWindow() const { return video_; }
     void show(int time, int length, bool playing);
@@ -36,4 +37,5 @@ private:
     HWND time_label_ = nullptr;
     HWND speed_box_ = nullptr;
     HWND volume_bar_ = nullptr;
+    bool fullscreen_ = false;
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <initializer_list>
 #include <string>
 
 #include <windows.h>
@@ -28,6 +29,7 @@ enum ControlId {
     kDeleteMark,
     kSpeed,
     kVolume,
+    kVideo,
 };
 
 const int kPad = 8;
@@ -46,6 +48,7 @@ struct Context {
 };
 
 HWND addControl(const Context& context, const wchar_t* type, const wchar_t* text, DWORD style, int id, DWORD ex_style = 0);
+void setVisible(std::initializer_list<HWND> windows, bool visible);
 
 std::wstring textOf(HWND control);
 void setText(HWND control, const std::wstring& text);

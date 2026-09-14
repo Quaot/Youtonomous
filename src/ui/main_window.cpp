@@ -99,24 +99,65 @@ LRESULT CALLBACK MainWindow::proc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_
 
 void MainWindow::saveSettingsOnClose()
 {
-    RECT rect{};
-    if (IsZoomed(hwnd_) || IsIconic(hwnd_)) {
-        WINDOWPLACEMENT placement{};
-        placement.length = sizeof placement;
+    WINDOWPLACEMENT placement{};
+    placement.length = sizeof placement;
+    if (fullscreen_)
+        placement = saved_placement_;
+    else
         GetWindowPlacement(hwnd_, &placement);
-        rect = placement.rcNormalPosition;
-    } else {
+
+    RECT rect = placement.rcNormalPosition;
+    if (!fullscreen_ && !IsZoomed(hwnd_) && !IsIconic(hwnd_))
         GetWindowRect(hwnd_, &rect);
-    }
 
     settings_.window_x = rect.left;
     settings_.window_y = rect.top;
     settings_.window_width = rect.right - rect.left;
     settings_.window_height = rect.bottom - rect.top;
-    settings_.maximized = IsZoomed(hwnd_) != 0;
+    settings_.maximized = placement.showCmd == SW_SHOWMAXIMIZED;
     settings_.volume = player_->volume();
     settings_.speed = player_->speed();
     saveSettings(settings_, settings_file_);
+}
+
+void MainWindow::setFullscreen(bool fullscreen)
+{
+    if (fullscreen == fullscreen_)
+        return;
+
+    if (fullscreen) {
+        saved_placement_.length = sizeof saved_placement_;
+        GetWindowPlacement(hwnd_, &saved_placement_);
+        saved_style_ = GetWindowLongPtrW(hwnd_, GWL_STYLE);
+
+        MONITORINFO monitor{};
+        monitor.cbSize = sizeof monitor;
+        GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &monitor);
+        const RECT& area = monitor.rcMonitor;
+
+        fullscreen_ = true;
+        library_panel_.setVisible(false);
+        marks_panel_.setVisible(false);
+        player_panel_.setFullscreen(true);
+
+        LONG_PTR style = (saved_style_ & ~(WS_OVERLAPPEDWINDOW | WS_MAXIMIZE)) | WS_POPUP;
+        SetWindowLongPtrW(hwnd_, GWL_STYLE, style);
+        SetWindowPos(hwnd_, HWND_TOP, area.left, area.top, area.right - area.left, area.bottom - area.top,
+                     SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+    } else {
+        fullscreen_ = false;
+        SetWindowLongPtrW(hwnd_, GWL_STYLE, saved_style_);
+        SetWindowPlacement(hwnd_, &saved_placement_);
+        SetWindowPos(hwnd_, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+
+        library_panel_.setVisible(true);
+        marks_panel_.setVisible(true);
+        player_panel_.setFullscreen(false);
+    }
+
+    RECT client;
+    GetClientRect(hwnd_, &client);
+    layout(client.right, client.bottom);
 }
 
 LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
@@ -215,6 +256,10 @@ void MainWindow::onCommand(int id, int code)
     case kSpeed:
         if (code == CBN_SELCHANGE)
             player_->setSpeed(player_panel_.speedSetting());
+        break;
+    case kVideo:
+        if (code == STN_DBLCLK)
+            setFullscreen(!fullscreen_);
         break;
     case kLibrary:
         if (code == LBN_DBLCLK) {
@@ -529,7 +574,13 @@ bool MainWindow::handleKey(const MSG& msg)
     case VK_OEM_PLUS: changeSpeed(0.25); break;
     case 'B': addMark(); break;
     case 'S': setStart(player_->time()); break;
+    case 'F': setFullscreen(!fullscreen_); break;
     case VK_HOME: goToStart(); break;
+    case VK_ESCAPE:
+        if (!fullscreen_)
+            return false;
+        setFullscreen(false);
+        break;
     default: return false;
     }
 

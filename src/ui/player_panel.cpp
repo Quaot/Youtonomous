@@ -25,7 +25,7 @@ const int kVolumeWidth = 90;
 
 void PlayerPanel::create(const Context& context)
 {
-    video_ = addControl(context, L"STATIC", L"", SS_BLACKRECT, 0);
+    video_ = addControl(context, L"STATIC", L"", SS_BLACKRECT | SS_NOTIFY, kVideo);
     seekbar_ = seekbar::create(context.parent, context.instance);
     prev_mark_ = addControl(context, L"BUTTON", L"Prev", BS_PUSHBUTTON, kPrevMark);
     back30_ = addControl(context, L"BUTTON", L"-30", BS_PUSHBUTTON, kBack30);
@@ -50,6 +50,11 @@ void PlayerPanel::create(const Context& context)
 
 void PlayerPanel::layout(int width, int height)
 {
+    if (fullscreen_) {
+        MoveWindow(video_, 0, 0, width, height, TRUE);
+        return;
+    }
+
     int bottom = height - kPad - kRow;
     int left = kSide + kPad * 2;
     int center_width = std::max(0, width - kSide * 2 - kPad * 4);
@@ -70,6 +75,14 @@ void PlayerPanel::layout(int width, int height)
     MoveWindow(speed_box_, x, bottom, kSpeedWidth, 200, TRUE);
     x += kSpeedWidth + kGap;
     MoveWindow(volume_bar_, x, bottom, kVolumeWidth, kRow, TRUE);
+}
+
+void PlayerPanel::setFullscreen(bool fullscreen)
+{
+    fullscreen_ = fullscreen;
+    ui::setVisible({seekbar_, prev_mark_, back30_, back10_, play_button_, forward10_, forward30_, next_mark_,
+                    time_label_, speed_box_, volume_bar_},
+                   !fullscreen);
 }
 
 void PlayerPanel::show(int time, int length, bool playing)

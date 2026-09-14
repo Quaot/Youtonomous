@@ -339,6 +339,31 @@ static void secondRun(const std::wstring& command_line, std::wstring& environmen
     check(waitFor([&] { return markCount(top) >= 2; }, 3000), "bookmarks survive a restart" + got(markCount(top)));
     check(speedShown(top) == L"1.5x", "the saved speed is shown after a restart");
     check(volumeShown(top) == 40, "the saved volume is shown after a restart" + got(volumeShown(top)));
+
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof monitor;
+    GetMonitorInfoW(MonitorFromWindow(top, MONITOR_DEFAULTTONEAREST), &monitor);
+    auto fills_screen = [&] {
+        RECT now{};
+        GetWindowRect(top, &now);
+        return EqualRect(&now, &monitor.rcMonitor) != 0;
+    };
+    auto restored = [&] {
+        RECT now{};
+        GetWindowRect(top, &now);
+        return within(now.left, 48, 52) && within(now.top, 58, 62) && within(now.right - now.left, 998, 1002);
+    };
+    std::vector<HWND> lists = children(top, L"ListBox");
+
+    key(top, 'F');
+    check(waitFor(fills_screen, 3000), "F fills the screen");
+    check(!lists.empty() && !IsWindowVisible(lists[0]), "fullscreen hides the library");
+    key(top, VK_ESCAPE);
+    check(waitFor(restored, 3000), "Esc restores the window's size and position");
+    check(!lists.empty() && IsWindowVisible(lists[0]), "leaving fullscreen shows the library again");
+    key(top, 'F');
+    check(waitFor(fills_screen, 3000), "F fills the screen again");
+
     check(closeApp(process, top), "app closes cleanly again");
 }
 

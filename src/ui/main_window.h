@@ -31,6 +31,7 @@ private:
     void onCommand(int id, int code);
     void tick();
     void saveSettingsOnClose();
+    void setFullscreen(bool fullscreen);
 
     void openFile();
     void download();
@@ -59,6 +60,10 @@ private:
     LibraryPanel library_panel_;
     PlayerPanel player_panel_;
     MarksPanel marks_panel_;
+
+    bool fullscreen_ = false;
+    WINDOWPLACEMENT saved_placement_{};
+    LONG_PTR saved_style_ = 0;
 
     std::filesystem::path settings_file_;
     Settings settings_;

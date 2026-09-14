@@ -11,6 +11,12 @@ HWND addControl(const Context& context, const wchar_t* type, const wchar_t* text
     return control;
 }
 
+void setVisible(std::initializer_list<HWND> windows, bool visible)
+{
+    for (HWND window : windows)
+        ShowWindow(window, visible ? SW_SHOW : SW_HIDE);
+}
+
 std::wstring textOf(HWND control)
 {
     int length = GetWindowTextLengthW(control);
