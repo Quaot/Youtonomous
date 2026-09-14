@@ -1,37 +1,48 @@
 #include "timecode.h"
 
 #include <cctype>
+#include <climits>
 #include <cstdio>
 #include <vector>
 
 namespace timecode {
-
-static const int kMaxNumber = 1000000;
 
 static bool isDigit(char c)
 {
     return std::isdigit(static_cast<unsigned char>(c)) != 0;
 }
 
+static bool isSpace(char c)
+{
+    return std::isspace(static_cast<unsigned char>(c)) != 0;
+}
+
 static std::string trim(const std::string& text)
 {
-    size_t first = text.find_first_not_of(" \t");
-    if (first == std::string::npos)
-        return "";
-    size_t last = text.find_last_not_of(" \t");
-    return text.substr(first, last - first + 1);
+    size_t first = 0;
+    while (first < text.size() && isSpace(text[first]))
+        ++first;
+    size_t last = text.size();
+    while (last > first && isSpace(text[last - 1]))
+        --last;
+    return text.substr(first, last - first);
+}
+
+static bool addDigit(long long& number, char c)
+{
+    number = number * 10 + (c - '0');
+    return number <= INT_MAX;
 }
 
 static std::optional<int> parseUnits(const std::string& text)
 {
-    int total = 0;
-    int number = 0;
+    long long total = 0;
+    long long number = 0;
     bool haveNumber = false;
 
     for (char c : text) {
         if (isDigit(c)) {
-            number = number * 10 + (c - '0');
-            if (number > kMaxNumber)
+            if (!addDigit(number, c))
                 return std::nullopt;
             haveNumber = true;
             continue;
@@ -45,15 +56,21 @@ static std::optional<int> parseUnits(const std::string& text)
         case 's': total += number; break;
         default: return std::nullopt;
         }
+        if (total > INT_MAX)
+            return std::nullopt;
         number = 0;
         haveNumber = false;
     }
-    return total + number;
+
+    total += number;
+    if (total > INT_MAX)
+        return std::nullopt;
+    return static_cast<int>(total);
 }
 
 static std::optional<int> parseColons(const std::string& text)
 {
-    std::vector<int> parts{0};
+    std::vector<long long> parts{0};
     bool haveNumber = false;
 
     for (char c : text) {
@@ -63,8 +80,7 @@ static std::optional<int> parseColons(const std::string& text)
             parts.push_back(0);
             haveNumber = false;
         } else if (isDigit(c)) {
-            parts.back() = parts.back() * 10 + (c - '0');
-            if (parts.back() > kMaxNumber)
+            if (!addDigit(parts.back(), c))
                 return std::nullopt;
             haveNumber = true;
         } else {
@@ -74,13 +90,15 @@ static std::optional<int> parseColons(const std::string& text)
     if (!haveNumber || parts.size() > 3)
         return std::nullopt;
 
-    int total = 0;
+    long long total = 0;
     for (size_t i = 0; i < parts.size(); ++i) {
         if (i > 0 && parts[i] >= 60)
             return std::nullopt;
         total = total * 60 + parts[i];
+        if (total > INT_MAX)
+            return std::nullopt;
     }
-    return total;
+    return static_cast<int>(total);
 }
 
 std::optional<int> parse(const std::string& text)
