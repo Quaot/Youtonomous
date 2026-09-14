@@ -28,6 +28,29 @@ target_link_libraries(youtonomous PRIVATE core vlc comdlg32 comctl32)
 target_link_options(youtonomous PRIVATE -municode)
 
 enable_testing()
-add_executable(tests tests/tests.cpp)
-target_link_libraries(tests PRIVATE core)
-add_test(NAME tests COMMAND tests)
+
+add_executable(timecode_test tests/timecode_test.cpp)
+target_link_libraries(timecode_test PRIVATE core)
+add_test(NAME timecode COMMAND timecode_test)
+
+add_executable(library_test tests/library_test.cpp)
+target_link_libraries(library_test PRIVATE core)
+add_test(NAME library COMMAND library_test)
+
+add_executable(text_test tests/text_test.cpp)
+target_include_directories(text_test PRIVATE src)
+add_test(NAME text COMMAND text_test)
+
+add_executable(seekbar_test tests/seekbar_test.cpp src/seekbar.cpp)
+target_link_libraries(seekbar_test PRIVATE core comctl32)
+add_test(NAME seekbar COMMAND seekbar_test)
+
+add_executable(player_test tests/player_test.cpp src/player.cpp)
+target_link_libraries(player_test PRIVATE core vlc)
+add_test(NAME player COMMAND player_test)
+set_tests_properties(player PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+
+add_executable(downloader_test tests/downloader_test.cpp src/downloader.cpp)
+target_link_libraries(downloader_test PRIVATE core)
+add_test(NAME downloader COMMAND downloader_test)
+set_tests_properties(downloader PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
