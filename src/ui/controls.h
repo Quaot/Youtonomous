@@ -26,6 +26,8 @@ enum ControlId {
     kMarkLabel,
     kAddMark,
     kDeleteMark,
+    kSpeed,
+    kVolume,
 };
 
 const int kPad = 8;

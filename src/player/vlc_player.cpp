@@ -1,6 +1,7 @@
 #include "vlc_player.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <vlc/vlc.h>
 
@@ -47,6 +48,7 @@ void VlcPlayer::open(const std::string& path, int start)
 
     libvlc_media_player_play(player_);
     loaded_ = true;
+    applyVolumeAndSpeed();
 }
 
 void VlcPlayer::togglePause()
@@ -57,6 +59,7 @@ void VlcPlayer::togglePause()
     if (libvlc_media_player_get_state(player_) == libvlc_Ended) {
         libvlc_media_player_stop(player_);
         libvlc_media_player_play(player_);
+        applyVolumeAndSpeed();
         return;
     }
     libvlc_media_player_pause(player_);
@@ -91,4 +94,26 @@ void VlcPlayer::seek(int seconds)
         seconds = std::min(seconds, end - 1);
     seconds = std::max(seconds, 0);
     libvlc_media_player_set_time(player_, static_cast<libvlc_time_t>(seconds) * 1000);
+}
+
+void VlcPlayer::setVolume(int percent)
+{
+    volume_ = std::clamp(percent, 0, 100);
+    applyVolumeAndSpeed();
+}
+
+void VlcPlayer::setSpeed(double rate)
+{
+    if (!std::isfinite(rate))
+        return;
+    speed_ = std::clamp(rate, 0.5, 2.0);
+    applyVolumeAndSpeed();
+}
+
+void VlcPlayer::applyVolumeAndSpeed()
+{
+    if (!ready())
+        return;
+    libvlc_audio_set_volume(player_, volume_);
+    libvlc_media_player_set_rate(player_, static_cast<float>(speed_));
 }

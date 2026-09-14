@@ -51,7 +51,7 @@ bool MainWindow::create(HINSTANCE instance, int show)
 {
     instance_ = instance;
 
-    INITCOMMONCONTROLSEX controls{sizeof controls, ICC_PROGRESS_CLASS};
+    INITCOMMONCONTROLSEX controls{sizeof controls, ICC_PROGRESS_CLASS | ICC_BAR_CLASSES};
     InitCommonControlsEx(&controls);
 
     WNDCLASSEXW wc{};
@@ -97,7 +97,7 @@ LRESULT CALLBACK MainWindow::proc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_
     return self->handle(msg, w_param, l_param);
 }
 
-void MainWindow::saveWindowSettings()
+void MainWindow::saveSettingsOnClose()
 {
     RECT rect{};
     if (IsZoomed(hwnd_) || IsIconic(hwnd_)) {
@@ -114,6 +114,8 @@ void MainWindow::saveWindowSettings()
     settings_.window_width = rect.right - rect.left;
     settings_.window_height = rect.bottom - rect.top;
     settings_.maximized = IsZoomed(hwnd_) != 0;
+    settings_.volume = player_->volume();
+    settings_.speed = player_->speed();
     saveSettings(settings_, settings_file_);
 }
 
@@ -125,7 +127,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
         library_.load();
         refreshLibrary();
         SetTimer(hwnd_, kTimer, 250, nullptr);
-        if (!player_ || !player_->ready()) {
+        if (!player_->ready()) {
             std::wstring message = L"Could not start the " + widen(settings_.backend) + L" player.";
             MessageBoxW(hwnd_, message.c_str(), L"Youtonomous", MB_ICONERROR);
         }
@@ -135,6 +137,10 @@ LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
         return 0;
     case WM_COMMAND:
         onCommand(LOWORD(w_param), HIWORD(w_param));
+        return 0;
+    case WM_HSCROLL:
+        if (player_panel_.isVolumeBar(reinterpret_cast<HWND>(l_param)))
+            player_->setVolume(player_panel_.volumeSetting());
         return 0;
     case WM_TIMER:
         tick();
@@ -154,7 +160,7 @@ LRESULT MainWindow::handle(UINT msg, WPARAM w_param, LPARAM l_param)
         onDownloadDone(reinterpret_cast<DownloadResult*>(l_param));
         return 0;
     case WM_DESTROY:
-        saveWindowSettings();
+        saveSettingsOnClose();
         KillTimer(hwnd_, kTimer);
         DeleteObject(font_);
         PostQuitMessage(0);
@@ -176,6 +182,10 @@ void MainWindow::createControls()
     marks_panel_.create(context);
 
     player_->attach(player_panel_.videoWindow());
+    player_->setVolume(settings_.volume);
+    player_->setSpeed(settings_.speed);
+    player_panel_.showVolume(player_->volume());
+    player_panel_.showSpeed(player_->speed());
 }
 
 void MainWindow::layout(int width, int height)
@@ -202,6 +212,10 @@ void MainWindow::onCommand(int id, int code)
     case kGoStart: goToStart(); break;
     case kAddMark: addMark(); break;
     case kDeleteMark: deleteSelectedMark(); break;
+    case kSpeed:
+        if (code == CBN_SELCHANGE)
+            player_->setSpeed(player_panel_.speedSetting());
+        break;
     case kLibrary:
         if (code == LBN_DBLCLK) {
             int index = library_panel_.selected(library_.videos().size());
@@ -474,6 +488,12 @@ void MainWindow::goToStart()
         player_->seek(video->start);
 }
 
+void MainWindow::changeSpeed(double step)
+{
+    player_->setSpeed(player_->speed() + step);
+    player_panel_.showSpeed(player_->speed());
+}
+
 bool MainWindow::handleKey(const MSG& msg)
 {
     if (msg.message != WM_KEYDOWN || (msg.hwnd != hwnd_ && !IsChild(hwnd_, msg.hwnd)))
@@ -505,6 +525,8 @@ bool MainWindow::handleKey(const MSG& msg)
     case VK_RIGHT: player_->skip(shift ? 60 : 10); break;
     case VK_OEM_4: jumpMark(-1); break;
     case VK_OEM_6: jumpMark(1); break;
+    case VK_OEM_MINUS: changeSpeed(-0.25); break;
+    case VK_OEM_PLUS: changeSpeed(0.25); break;
     case 'B': addMark(); break;
     case 'S': setStart(player_->time()); break;
     case VK_HOME: goToStart(); break;

@@ -16,6 +16,13 @@ public:
     void show(int time, int length, bool playing);
     void showMarks(const std::vector<Bookmark>& marks, int start);
 
+    void showVolume(int percent);
+    int volumeSetting() const;
+    bool isVolumeBar(HWND window) const { return window == volume_bar_; }
+
+    void showSpeed(double rate);
+    double speedSetting() const;
+
 private:
     HWND video_ = nullptr;
     HWND seekbar_ = nullptr;
@@ -27,4 +34,6 @@ private:
     HWND forward30_ = nullptr;
     HWND next_mark_ = nullptr;
     HWND time_label_ = nullptr;
+    HWND speed_box_ = nullptr;
+    HWND volume_bar_ = nullptr;
 };

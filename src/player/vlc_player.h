@@ -26,8 +26,17 @@ public:
 
     void seek(int seconds) override;
 
+    void setVolume(int percent) override;
+    int volume() const override { return volume_; }
+    void setSpeed(double rate) override;
+    double speed() const override { return speed_; }
+
 private:
+    void applyVolumeAndSpeed();
+
     libvlc_instance_t* vlc_ = nullptr;
     libvlc_media_player_t* player_ = nullptr;
     bool loaded_ = false;
+    int volume_ = 100;
+    double speed_ = 1.0;
 };

@@ -30,7 +30,7 @@ private:
     void layout(int width, int height);
     void onCommand(int id, int code);
     void tick();
-    void saveWindowSettings();
+    void saveSettingsOnClose();
 
     void openFile();
     void download();
@@ -49,6 +49,8 @@ private:
     void saveStartFromBox();
     void setStart(int seconds);
     void goToStart();
+
+    void changeSpeed(double step);
 
     HWND hwnd_ = nullptr;
     HINSTANCE instance_ = nullptr;

@@ -21,4 +21,9 @@ public:
 
     virtual void seek(int seconds) = 0;
     void skip(int seconds) { seek(time() + seconds); }
+
+    virtual void setVolume(int percent) = 0;
+    virtual int volume() const = 0;
+    virtual void setSpeed(double rate) = 0;
+    virtual double speed() const = 0;
 };

@@ -8,6 +8,8 @@
 
 #include <windows.h>
 
+#include <commctrl.h>
+
 #include <nlohmann/json.hpp>
 
 #include "check.h"
@@ -184,6 +186,20 @@ static int markCount(HWND top)
     return static_cast<int>(SendMessageW(lists[1], LB_GETCOUNT, 0, 0));
 }
 
+static std::wstring speedShown(HWND top)
+{
+    std::vector<HWND> boxes = children(top, L"ComboBox");
+    return boxes.empty() ? std::wstring() : textOf(boxes[0]);
+}
+
+static int volumeShown(HWND top)
+{
+    std::vector<HWND> bars = children(top, L"msctls_trackbar32");
+    if (bars.empty())
+        return -1;
+    return static_cast<int>(SendMessageW(bars[0], TBM_GETPOS, 0, 0));
+}
+
 static nlohmann::json savedVideo(const fs::path& library_file)
 {
     std::ifstream in(library_file);
@@ -191,6 +207,13 @@ static nlohmann::json savedVideo(const fs::path& library_file)
     if (items.is_array() && !items.empty())
         return items[0];
     return nlohmann::json::object();
+}
+
+static nlohmann::json readJson(const fs::path& file)
+{
+    std::ifstream in(file);
+    nlohmann::json item = nlohmann::json::parse(in, nullptr, false);
+    return item.is_object() ? item : nlohmann::json::object();
 }
 
 static bool hasMark(const nlohmann::json& video, const std::string& label)
@@ -279,14 +302,19 @@ static void firstRun(const std::wstring& command_line, std::wstring& environment
     key(top, VK_RIGHT);
     check(waitFor([&] { return within(playbackTime(top), 30, 31); }, 5000), "Right arrow moves forward 10 s" + got(playbackTime(top)));
 
-    check(closeApp(process, top), "app closes cleanly");
-}
+    check(speedShown(top) == L"1x", "speed starts at 1x");
+    key(top, VK_OEM_PLUS);
+    key(top, VK_OEM_PLUS);
+    check(waitFor([&] { return speedShown(top) == L"1.5x"; }, 3000), "= pressed twice shows 1.5x");
 
-static nlohmann::json readJson(const fs::path& file)
-{
-    std::ifstream in(file);
-    nlohmann::json item = nlohmann::json::parse(in, nullptr, false);
-    return item.is_object() ? item : nlohmann::json::object();
+    std::vector<HWND> volume_bars = children(top, L"msctls_trackbar32");
+    check(volume_bars.size() == 1, "one volume slider is shown");
+    if (!volume_bars.empty()) {
+        SendMessageW(volume_bars[0], TBM_SETPOS, TRUE, 40);
+        SendMessageW(top, WM_HSCROLL, MAKEWPARAM(TB_ENDTRACK, 0), reinterpret_cast<LPARAM>(volume_bars[0]));
+    }
+
+    check(closeApp(process, top), "app closes cleanly");
 }
 
 static void secondRun(const std::wstring& command_line, std::wstring& environment)
@@ -309,6 +337,8 @@ static void secondRun(const std::wstring& command_line, std::wstring& environmen
     waitFor([&] { return (first = playbackTime(top)) >= 1; }, 15000);
     check(within(first, 19, 25), "reopened video starts at the saved start point" + got(first));
     check(waitFor([&] { return markCount(top) >= 2; }, 3000), "bookmarks survive a restart" + got(markCount(top)));
+    check(speedShown(top) == L"1.5x", "the saved speed is shown after a restart");
+    check(volumeShown(top) == 40, "the saved volume is shown after a restart" + got(volumeShown(top)));
     check(closeApp(process, top), "app closes cleanly again");
 }
 
@@ -340,6 +370,8 @@ int main(int argc, char** argv)
 
     nlohmann::json settings = readJson(settings_file);
     check(settings.contains("window_width"), "closing the app saves settings");
+    check(settings.value("volume", -1) == 40, "closing the app saves the volume");
+    check(settings.value("speed", 0.0) == 1.5, "closing the app saves the speed");
     settings["window_x"] = 50;
     settings["window_y"] = 60;
     settings["window_width"] = 1000;

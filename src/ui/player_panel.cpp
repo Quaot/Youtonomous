@@ -1,12 +1,27 @@
 #include "player_panel.h"
 
 #include <algorithm>
+#include <cmath>
+
+#include <commctrl.h>
 
 #include "seekbar.h"
 #include "text.h"
 #include "timecode.h"
 
 using namespace ui;
+
+namespace {
+
+const double kSpeeds[] = {0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0};
+const wchar_t* kSpeedNames[] = {L"0.5x", L"0.75x", L"1x", L"1.25x", L"1.5x", L"1.75x", L"2x"};
+const int kSpeedCount = 7;
+
+const int kTimeWidth = 110;
+const int kSpeedWidth = 64;
+const int kVolumeWidth = 90;
+
+}
 
 void PlayerPanel::create(const Context& context)
 {
@@ -20,6 +35,17 @@ void PlayerPanel::create(const Context& context)
     forward30_ = addControl(context, L"BUTTON", L"+30", BS_PUSHBUTTON, kForward30);
     next_mark_ = addControl(context, L"BUTTON", L"Next", BS_PUSHBUTTON, kNextMark);
     time_label_ = addControl(context, L"STATIC", L"0:00 / 0:00", SS_CENTERIMAGE, 0);
+
+    speed_box_ = addControl(context, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL, kSpeed);
+    for (const wchar_t* name : kSpeedNames)
+        SendMessageW(speed_box_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
+
+    volume_bar_ = addControl(context, TRACKBAR_CLASSW, L"", TBS_HORZ | TBS_NOTICKS, kVolume);
+    SendMessageW(volume_bar_, TBM_SETRANGEMIN, FALSE, 0);
+    SendMessageW(volume_bar_, TBM_SETRANGEMAX, TRUE, 100);
+
+    showSpeed(1.0);
+    showVolume(100);
 }
 
 void PlayerPanel::layout(int width, int height)
@@ -37,7 +63,13 @@ void PlayerPanel::layout(int width, int height)
         MoveWindow(button, x, bottom, kButton, kRow, TRUE);
         x += kButton + kGap;
     }
-    MoveWindow(time_label_, x + kPad, bottom, 160, kRow, TRUE);
+
+    x += kPad;
+    MoveWindow(time_label_, x, bottom, kTimeWidth, kRow, TRUE);
+    x += kTimeWidth + kGap;
+    MoveWindow(speed_box_, x, bottom, kSpeedWidth, 200, TRUE);
+    x += kSpeedWidth + kGap;
+    MoveWindow(volume_bar_, x, bottom, kVolumeWidth, kRow, TRUE);
 }
 
 void PlayerPanel::show(int time, int length, bool playing)
@@ -52,4 +84,32 @@ void PlayerPanel::show(int time, int length, bool playing)
 void PlayerPanel::showMarks(const std::vector<Bookmark>& marks, int start)
 {
     seekbar::setMarks(seekbar_, marks, start);
+}
+
+void PlayerPanel::showVolume(int percent)
+{
+    SendMessageW(volume_bar_, TBM_SETPOS, TRUE, std::clamp(percent, 0, 100));
+}
+
+int PlayerPanel::volumeSetting() const
+{
+    return static_cast<int>(SendMessageW(volume_bar_, TBM_GETPOS, 0, 0));
+}
+
+void PlayerPanel::showSpeed(double rate)
+{
+    int nearest = 0;
+    for (int i = 1; i < kSpeedCount; ++i) {
+        if (std::fabs(kSpeeds[i] - rate) < std::fabs(kSpeeds[nearest] - rate))
+            nearest = i;
+    }
+    SendMessageW(speed_box_, CB_SETCURSEL, nearest, 0);
+}
+
+double PlayerPanel::speedSetting() const
+{
+    int index = static_cast<int>(SendMessageW(speed_box_, CB_GETCURSEL, 0, 0));
+    if (index < 0 || index >= kSpeedCount)
+        return 1.0;
+    return kSpeeds[index];
 }

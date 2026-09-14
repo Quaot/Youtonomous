@@ -57,6 +57,7 @@ void MpvPlayer::open(const std::string& path, int start)
     std::string start_text = std::to_string(std::max(start, 0));
     mpv_set_property_string(mpv_, "start", start_text.c_str());
     mpv_set_property_string(mpv_, "pause", "no");
+    applyVolumeAndSpeed();
     command({"loadfile", path.c_str(), "replace"});
     loaded_ = true;
 }
@@ -107,6 +108,30 @@ void MpvPlayer::seek(int seconds)
 
     std::string target = std::to_string(seconds);
     command({"seek", target.c_str(), "absolute+exact"});
+}
+
+void MpvPlayer::setVolume(int percent)
+{
+    volume_ = std::clamp(percent, 0, 100);
+    applyVolumeAndSpeed();
+}
+
+void MpvPlayer::setSpeed(double rate)
+{
+    if (!std::isfinite(rate))
+        return;
+    speed_ = std::clamp(rate, 0.5, 2.0);
+    applyVolumeAndSpeed();
+}
+
+void MpvPlayer::applyVolumeAndSpeed()
+{
+    if (!mpv_)
+        return;
+    double volume = volume_;
+    double speed = speed_;
+    mpv_set_property(mpv_, "volume", MPV_FORMAT_DOUBLE, &volume);
+    mpv_set_property(mpv_, "speed", MPV_FORMAT_DOUBLE, &speed);
 }
 
 void MpvPlayer::drainEvents() const

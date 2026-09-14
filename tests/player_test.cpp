@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <functional>
+#include <limits>
 #include <string>
 #include <system_error>
 
@@ -52,6 +54,18 @@ static void watch(const std::function<void()>& sample, int milliseconds)
 static std::string num(int value)
 {
     return std::to_string(value);
+}
+
+static std::string dec(double value)
+{
+    char buffer[64];
+    std::snprintf(buffer, sizeof buffer, "%.3f", value);
+    return buffer;
+}
+
+static bool same(double value, double expected)
+{
+    return std::fabs(value - expected) < 0.001;
 }
 
 static bool runProcess(const std::wstring& command_line, int milliseconds)
@@ -113,6 +127,60 @@ static void testNothingOpen()
     check(!player.playing(), "playing() stays false after a second togglePause with nothing open");
 }
 
+static void testVolumeAndSpeedWithNothingOpen()
+{
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
+    check(player.volume() == 100, "volume() is 100 on a new player, got " + num(player.volume()));
+    check(same(player.speed(), 1.0), "speed() is 1.0 on a new player, got " + dec(player.speed()));
+
+    player.setSpeed(std::numeric_limits<double>::quiet_NaN());
+    check(same(player.speed(), 1.0), "setSpeed(NaN) on a new player keeps 1.0, got " + dec(player.speed()));
+    player.setSpeed(std::numeric_limits<double>::infinity());
+    check(same(player.speed(), 1.0), "setSpeed(infinity) on a new player keeps 1.0, got " + dec(player.speed()));
+    player.setSpeed(-std::numeric_limits<double>::infinity());
+    check(same(player.speed(), 1.0), "setSpeed(-infinity) on a new player keeps 1.0, got " + dec(player.speed()));
+
+    player.attach(video_window);
+    player.setVolume(50);
+    check(player.volume() == 50, "setVolume(50) with nothing open gives 50, got " + num(player.volume()));
+    player.setVolume(0);
+    check(player.volume() == 0, "setVolume(0) with nothing open gives 0, got " + num(player.volume()));
+    player.setVolume(100);
+    check(player.volume() == 100, "setVolume(100) with nothing open gives 100, got " + num(player.volume()));
+    player.setVolume(150);
+    check(player.volume() == 100, "setVolume(150) clamps to 100, got " + num(player.volume()));
+    player.setVolume(-20);
+    check(player.volume() == 0, "setVolume(-20) clamps to 0, got " + num(player.volume()));
+    player.setVolume(std::numeric_limits<int>::max());
+    check(player.volume() == 100, "setVolume(INT_MAX) clamps to 100, got " + num(player.volume()));
+    player.setVolume(std::numeric_limits<int>::min());
+    check(player.volume() == 0, "setVolume(INT_MIN) clamps to 0, got " + num(player.volume()));
+
+    player.setSpeed(1.5);
+    check(same(player.speed(), 1.5), "setSpeed(1.5) with nothing open gives 1.5, got " + dec(player.speed()));
+    player.setSpeed(0.5);
+    check(same(player.speed(), 0.5), "setSpeed(0.5) with nothing open gives 0.5, got " + dec(player.speed()));
+    player.setSpeed(2.0);
+    check(same(player.speed(), 2.0), "setSpeed(2.0) with nothing open gives 2.0, got " + dec(player.speed()));
+    player.setSpeed(10.0);
+    check(same(player.speed(), 2.0), "setSpeed(10.0) clamps to 2.0, got " + dec(player.speed()));
+    player.setSpeed(0.1);
+    check(same(player.speed(), 0.5), "setSpeed(0.1) clamps to 0.5, got " + dec(player.speed()));
+    player.setSpeed(0.0);
+    check(same(player.speed(), 0.5), "setSpeed(0.0) clamps to 0.5, got " + dec(player.speed()));
+    player.setSpeed(-1.0);
+    check(same(player.speed(), 0.5), "setSpeed(-1.0) clamps to 0.5, got " + dec(player.speed()));
+
+    player.setSpeed(1.5);
+    player.setSpeed(std::numeric_limits<double>::quiet_NaN());
+    check(same(player.speed(), 1.5), "setSpeed(NaN) keeps the previous 1.5, got " + dec(player.speed()));
+    player.setSpeed(std::numeric_limits<double>::infinity());
+    check(same(player.speed(), 1.5), "setSpeed(infinity) keeps the previous 1.5, got " + dec(player.speed()));
+    player.setSpeed(-std::numeric_limits<double>::infinity());
+    check(same(player.speed(), 1.5), "setSpeed(-infinity) keeps the previous 1.5, got " + dec(player.speed()));
+}
+
 static void testMissingFile(const fs::path& folder)
 {
     auto owned = makePlayer(backend);
@@ -141,6 +209,27 @@ static bool startPlaying(Player& player, int start)
     player.attach(video_window);
     player.open(clip, start);
     return waitFor([&] { return player.playing() && player.length() > 0; }, 10000);
+}
+
+static double playbackRate(Player& player, int milliseconds, bool& stayed_playing)
+{
+    stayed_playing = true;
+    int first = player.time();
+    waitFor([&] { if (!player.playing()) stayed_playing = false; return player.time() != first; }, 4500);
+    int from = player.time();
+    Clock::time_point started = Clock::now();
+    watch([&] { if (!player.playing()) stayed_playing = false; }, milliseconds);
+    int last = player.time();
+    waitFor([&] { if (!player.playing()) stayed_playing = false; return player.time() != last; }, 4500);
+    int to = player.time();
+    double wall = std::chrono::duration<double>(Clock::now() - started).count();
+    return (to - from) / wall;
+}
+
+static bool seekForMeasuring(Player& player)
+{
+    player.seek(2);
+    return waitFor([&] { int t = player.time(); return player.playing() && t >= 2 && t <= 4; }, 5000);
 }
 
 static void testOpen()
@@ -276,6 +365,133 @@ static void testReopen(const fs::path& folder)
           "opening the clip again at 5 restarts at 5, got " + num(player.time()));
 }
 
+static void testVolumeAndSpeedWithMissingFile(const fs::path& folder)
+{
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
+    player.attach(video_window);
+    player.open((folder / "does-not-exist" / "missing.mp4").u8string(), 0);
+    player.setVolume(30);
+    player.setSpeed(1.5);
+    check(player.volume() == 30, "setVolume(30) right after opening a non-existent file gives 30, got " + num(player.volume()));
+    check(same(player.speed(), 1.5), "setSpeed(1.5) right after opening a non-existent file gives 1.5, got " + dec(player.speed()));
+
+    waitFor([&] { return !player.playing(); }, 5000);
+    Sleep(500);
+    player.setVolume(200);
+    player.setSpeed(0.25);
+    player.setSpeed(std::numeric_limits<double>::quiet_NaN());
+    check(player.volume() == 100, "setVolume(200) after a failed open clamps to 100, got " + num(player.volume()));
+    check(same(player.speed(), 0.5), "setSpeed(0.25) then NaN after a failed open gives 0.5, got " + dec(player.speed()));
+    Sleep(300);
+    check(player.time() >= 0 && player.length() >= 0, "setVolume and setSpeed after opening a non-existent file do not crash");
+}
+
+static void testVolumeAndSpeedBeforeOpen()
+{
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
+    player.setVolume(40);
+    player.setSpeed(2.0);
+    player.attach(video_window);
+    player.open(clip, 0);
+    check(player.volume() == 40, "volume() set to 40 before open is still 40 right after open, got " + num(player.volume()));
+    check(same(player.speed(), 2.0), "speed() set to 2.0 before open is still 2.0 right after open, got " + dec(player.speed()));
+    check(waitFor([&] { return player.playing() && player.length() > 0; }, 10000), "clip plays after setting volume and speed before open");
+    check(player.volume() == 40, "volume() set to 40 before open is still 40 while playing, got " + num(player.volume()));
+    check(same(player.speed(), 2.0), "speed() set to 2.0 before open is still 2.0 while playing, got " + dec(player.speed()));
+
+    check(seekForMeasuring(player), "seek(2) lands near 2 before measuring speed 2.0 set before open, got " + num(player.time()));
+    bool stayed_playing = true;
+    double rate = playbackRate(player, 4000, stayed_playing);
+    check(rate >= 1.5, "speed 2.0 set before open plays at least 1.5x, got " + dec(rate) + "x");
+    check(stayed_playing, "playing() stays true while playing at speed 2.0 set before open");
+}
+
+static void testSpeedPlayback()
+{
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
+    check(startPlaying(player, 0), "clip plays for the speed tests");
+
+    check(seekForMeasuring(player), "seek(2) lands near 2 before measuring speed 1.0, got " + num(player.time()));
+    bool stayed_playing = true;
+    double rate = playbackRate(player, 4000, stayed_playing);
+    check(rate >= 0.7 && rate <= 1.3, "speed 1.0 plays between 0.7x and 1.3x, got " + dec(rate) + "x");
+    check(stayed_playing, "playing() stays true while playing at speed 1.0");
+
+    player.setSpeed(0.5);
+    check(same(player.speed(), 0.5), "setSpeed(0.5) while playing gives 0.5 right away, got " + dec(player.speed()));
+    check(player.playing(), "playing() stays true right after setSpeed(0.5)");
+    player.setSpeed(std::numeric_limits<double>::quiet_NaN());
+    check(same(player.speed(), 0.5), "setSpeed(NaN) while playing keeps 0.5, got " + dec(player.speed()));
+    player.setSpeed(5.0);
+    check(same(player.speed(), 2.0), "setSpeed(5.0) while playing clamps to 2.0, got " + dec(player.speed()));
+    player.setSpeed(0.5);
+    player.setVolume(150);
+    check(player.volume() == 100, "setVolume(150) while playing clamps to 100 right away, got " + num(player.volume()));
+    player.setVolume(-5);
+    check(player.volume() == 0, "setVolume(-5) while playing clamps to 0 right away, got " + num(player.volume()));
+    player.setVolume(60);
+    check(player.volume() == 60, "setVolume(60) while playing gives 60 right away, got " + num(player.volume()));
+    check(player.playing(), "playing() stays true right after setVolume while playing");
+
+    player.togglePause();
+    check(waitFor([&] { return !player.playing(); }, 5000), "togglePause() at speed 0.5 pauses");
+    Sleep(300);
+    check(same(player.speed(), 0.5), "speed() stays 0.5 while paused, got " + dec(player.speed()));
+    player.togglePause();
+    check(waitFor([&] { return player.playing(); }, 5000), "togglePause() at speed 0.5 resumes");
+    check(same(player.speed(), 0.5), "speed() stays 0.5 after resuming, got " + dec(player.speed()));
+    check(player.volume() == 60, "volume() stays 60 after pausing and resuming, got " + num(player.volume()));
+
+    check(seekForMeasuring(player), "seek(2) lands near 2 before measuring speed 0.5, got " + num(player.time()));
+    rate = playbackRate(player, 4000, stayed_playing);
+    check(rate > 0 && rate <= 0.75, "speed 0.5 after pausing and resuming plays above 0 and at most 0.75x, got " + dec(rate) + "x");
+    check(stayed_playing, "playing() stays true while playing at speed 0.5");
+}
+
+static void testVolumeAndSpeedAcrossReopen(const fs::path& folder)
+{
+    fs::path other = folder / "other.mp4";
+    std::error_code error;
+    fs::copy_file(fs::u8path(clip), other, fs::copy_options::overwrite_existing, error);
+    check(!error && fs::exists(other), "a second copy of the clip is made for the reopen tests");
+
+    auto owned = makePlayer(backend);
+    Player& player = *owned;
+    check(startPlaying(player, 0), "clip plays for the volume and speed reopen tests");
+    player.setVolume(25);
+    player.setSpeed(2.0);
+    bool stayed_playing = true;
+    watch([&] { if (!player.playing()) stayed_playing = false; }, 500);
+    check(stayed_playing, "playing() stays true after setVolume(25) and setSpeed(2.0) while playing");
+
+    player.seek(20);
+    waitFor([&] { return player.time() >= 20; }, 5000);
+    player.open(clip, 0);
+    check(player.volume() == 25, "volume() stays 25 right after opening the same clip again, got " + num(player.volume()));
+    check(same(player.speed(), 2.0), "speed() stays 2.0 right after opening the same clip again, got " + dec(player.speed()));
+    check(waitFor([&] { return player.playing() && player.time() <= 5; }, 10000), "the same clip plays again from the start, got " + num(player.time()));
+    check(player.volume() == 25, "volume() stays 25 while the same clip plays again, got " + num(player.volume()));
+    check(same(player.speed(), 2.0), "speed() stays 2.0 while the same clip plays again, got " + dec(player.speed()));
+
+    player.seek(20);
+    waitFor([&] { return player.time() >= 20; }, 5000);
+    player.open(other.u8string(), 0);
+    check(player.volume() == 25, "volume() stays 25 right after opening another file, got " + num(player.volume()));
+    check(same(player.speed(), 2.0), "speed() stays 2.0 right after opening another file, got " + dec(player.speed()));
+    check(waitFor([&] { return player.playing() && player.length() > 0 && player.time() <= 5; }, 10000),
+          "another file plays from the start, got " + num(player.time()));
+    check(player.volume() == 25, "volume() stays 25 while another file plays, got " + num(player.volume()));
+    check(same(player.speed(), 2.0), "speed() stays 2.0 while another file plays, got " + dec(player.speed()));
+
+    check(seekForMeasuring(player), "seek(2) lands near 2 before measuring speed 2.0 after reopening, got " + num(player.time()));
+    double rate = playbackRate(player, 4000, stayed_playing);
+    check(rate >= 1.5, "speed 2.0 set before opening another file plays at least 1.5x, got " + dec(rate) + "x");
+    check(stayed_playing, "playing() stays true while another file plays at speed 2.0");
+}
+
 int main(int argc, char** argv)
 {
     if (argc > 1)
@@ -298,6 +514,7 @@ int main(int argc, char** argv)
 
     int result = 0;
     testNothingOpen();
+    testVolumeAndSpeedWithNothingOpen();
     bool ready = makePlayer(backend)->ready();
     if (!ready) {
         std::printf("SKIP: VLC did not start\n");
@@ -314,6 +531,10 @@ int main(int argc, char** argv)
             testSkip();
             testPause();
             testReopen(folder);
+            testVolumeAndSpeedWithMissingFile(folder);
+            testVolumeAndSpeedBeforeOpen();
+            testSpeedPlayback();
+            testVolumeAndSpeedAcrossReopen(folder);
             result = report();
         }
     }

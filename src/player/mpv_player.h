@@ -28,8 +28,14 @@ public:
 
     void seek(int seconds) override;
 
+    void setVolume(int percent) override;
+    int volume() const override { return volume_; }
+    void setSpeed(double rate) override;
+    double speed() const override { return speed_; }
+
 private:
     void initialize();
+    void applyVolumeAndSpeed();
     void drainEvents() const;
     bool flag(const char* name) const;
     double number(const char* name) const;
@@ -38,4 +44,6 @@ private:
     mpv_handle* mpv_ = nullptr;
     bool initialized_ = false;
     bool loaded_ = false;
+    int volume_ = 100;
+    double speed_ = 1.0;
 };
