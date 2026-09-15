@@ -253,8 +253,19 @@ void MainWindow::onCommand(int id, int code)
     case kSetStart: saveStartFromBox(); break;
     case kGoStart: goToStart(); break;
     case kResume: resume(); break;
-    case kAddMark: addMark(); break;
     case kDeleteMark: deleteSelectedMark(); break;
+    case kAddMark:
+        if (editing_mark_ >= 0)
+            saveEditedMark();
+        else
+            addMark();
+        break;
+    case kEditMark:
+        if (editing_mark_ >= 0)
+            cancelEditingMark();
+        else
+            startEditingMark();
+        break;
     case kSpeed:
         if (code == CBN_SELCHANGE)
             player_->setSpeed(player_panel_.speedSetting());
@@ -271,12 +282,19 @@ void MainWindow::onCommand(int id, int code)
         }
         break;
     case kMarks:
-        if (code == LBN_SELCHANGE)
+        if (code == LBN_SELCHANGE) {
+            if (editing_mark_ >= 0)
+                cancelEditingMark();
             jumpToSelectedMark();
+            showSelectedNote();
+        } else if (code == LBN_DBLCLK) {
+            startEditingMark();
+        }
         break;
     }
 
-    if (code == BN_CLICKED || code == LBN_SELCHANGE || code == LBN_DBLCLK)
+    bool clicked = code == BN_CLICKED || code == LBN_SELCHANGE || code == LBN_DBLCLK;
+    if (clicked && editing_mark_ < 0)
         SetFocus(hwnd_);
     tick();
 }
@@ -433,8 +451,12 @@ Video* MainWindow::current()
 
 void MainWindow::refreshMarks()
 {
+    if (editing_mark_ >= 0)
+        cancelEditingMark();
+
     Video* video = current();
     marks_panel_.show(video);
+    marks_panel_.showNote("");
     if (video) {
         player_panel_.showMarks(video->marks, video->start);
         marks_panel_.showStoppedAt(video->position > video->start + 5 ? video->position : 0);
@@ -454,7 +476,7 @@ void MainWindow::addMark()
     if (label.empty())
         label = "Bookmark";
 
-    Library::addMark(*video, {player_->time(), label, false});
+    Library::addMark(*video, {player_->time(), label, false, ""});
     library_.save();
     refreshMarks();
 }
@@ -505,6 +527,60 @@ void MainWindow::jumpMark(int direction)
     auto previous = std::find_if(marks.rbegin(), marks.rend(), [&](const Bookmark& mark) { return mark.time < now - 2; });
     if (previous != marks.rend())
         player_->seek(previous->time);
+}
+
+void MainWindow::showSelectedNote()
+{
+    Video* video = current();
+    int index = video ? marks_panel_.selected(video->marks.size()) : -1;
+    marks_panel_.showNote(index >= 0 ? video->marks[index].note : "");
+}
+
+void MainWindow::startEditingMark()
+{
+    Video* video = current();
+    if (!video)
+        return;
+
+    int index = marks_panel_.selected(video->marks.size());
+    if (index < 0) {
+        MessageBeep(MB_ICONWARNING);
+        return;
+    }
+
+    editing_mark_ = index;
+    const Bookmark& mark = video->marks[index];
+    marks_panel_.beginEdit(mark.label, mark.note);
+}
+
+void MainWindow::saveEditedMark()
+{
+    Video* video = current();
+    if (!video || editing_mark_ < 0 || editing_mark_ >= static_cast<int>(video->marks.size())) {
+        cancelEditingMark();
+        return;
+    }
+
+    std::string label = marks_panel_.takeLabel();
+    std::string note = marks_panel_.noteText();
+    Bookmark& mark = video->marks[editing_mark_];
+    if (!label.empty())
+        mark.label = label;
+    mark.note = note;
+
+    editing_mark_ = -1;
+    marks_panel_.endEdit();
+    library_.save();
+    refreshMarks();
+    SetFocus(hwnd_);
+}
+
+void MainWindow::cancelEditingMark()
+{
+    editing_mark_ = -1;
+    marks_panel_.endEdit();
+    showSelectedNote();
+    SetFocus(hwnd_);
 }
 
 void MainWindow::saveStartFromBox()
@@ -577,17 +653,25 @@ bool MainWindow::handleKey(const MSG& msg)
     if (msg.message != WM_KEYDOWN || (msg.hwnd != hwnd_ && !IsChild(hwnd_, msg.hwnd)))
         return false;
 
+    if (msg.wParam == VK_ESCAPE && editing_mark_ >= 0) {
+        cancelEditingMark();
+        return true;
+    }
+
     HWND focus = GetFocus();
     bool in_url = library_panel_.isUrlBox(focus);
     bool in_start = marks_panel_.isStartBox(focus);
     bool in_label = marks_panel_.isLabelBox(focus);
-    bool typing = in_url || in_start || in_label;
+    bool in_note = marks_panel_.isNoteBox(focus);
+    bool typing = in_url || in_start || in_label || in_note;
 
-    if (msg.wParam == VK_RETURN && typing) {
+    if (msg.wParam == VK_RETURN && typing && !in_note) {
         if (in_url)
             download();
         else if (in_start)
             saveStartFromBox();
+        else if (editing_mark_ >= 0)
+            saveEditedMark();
         else
             addMark();
         return true;
@@ -605,6 +689,7 @@ bool MainWindow::handleKey(const MSG& msg)
     case VK_OEM_6: jumpMark(1); break;
     case VK_OEM_MINUS: changeSpeed(-0.25); break;
     case VK_OEM_PLUS: changeSpeed(0.25); break;
+    case VK_F2: startEditingMark(); break;
     case 'B': addMark(); break;
     case 'S': setStart(player_->time()); break;
     case 'R': resume(); break;

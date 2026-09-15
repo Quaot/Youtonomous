@@ -18,7 +18,7 @@ static json toJson(const Video& video)
 {
     json marks = json::array();
     for (const Bookmark& mark : video.marks)
-        marks.push_back({{"time", mark.time}, {"label", mark.label}, {"chapter", mark.chapter}});
+        marks.push_back({{"time", mark.time}, {"label", mark.label}, {"chapter", mark.chapter}, {"note", mark.note}});
 
     return {
         {"id", video.id},
@@ -51,8 +51,12 @@ static Video fromJson(const json& item)
     video.start = item.value("start", 0);
     video.position = readPosition(item);
 
-    for (const json& mark : item.value("marks", json::array()))
-        video.marks.push_back({mark.value("time", 0), mark.value("label", ""), mark.value("chapter", false)});
+    for (const json& mark : item.value("marks", json::array())) {
+        Bookmark bookmark{mark.value("time", 0), mark.value("label", ""), mark.value("chapter", false), ""};
+        if (mark.contains("note") && mark["note"].is_string())
+            bookmark.note = mark["note"].get<std::string>();
+        video.marks.push_back(bookmark);
+    }
 
     sortMarks(video);
     return video;

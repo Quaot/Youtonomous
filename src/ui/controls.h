@@ -31,6 +31,8 @@ enum ControlId {
     kVolume,
     kVideo,
     kResume,
+    kEditMark,
+    kMarkNote,
 };
 
 const int kPad = 8;

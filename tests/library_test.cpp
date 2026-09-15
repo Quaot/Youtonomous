@@ -60,6 +60,13 @@ static Bookmark mark(int time, const std::string& label, bool chapter)
     return result;
 }
 
+static Bookmark notedMark(int time, const std::string& label, bool chapter, const std::string& note)
+{
+    Bookmark result = mark(time, label, chapter);
+    result.note = note;
+    return result;
+}
+
 static Video makeVideo(const std::string& id, const std::string& title)
 {
     Video video;
@@ -77,7 +84,7 @@ static bool sameMarks(const std::vector<Bookmark>& a, const std::vector<Bookmark
     if (a.size() != b.size())
         return false;
     for (size_t i = 0; i < a.size(); ++i)
-        if (a[i].time != b[i].time || a[i].label != b[i].label || a[i].chapter != b[i].chapter)
+        if (a[i].time != b[i].time || a[i].label != b[i].label || a[i].chapter != b[i].chapter || a[i].note != b[i].note)
             return false;
     return true;
 }
@@ -100,7 +107,7 @@ static std::string describe(const std::vector<Bookmark>& marks)
 {
     std::string result;
     for (const Bookmark& m : marks)
-        result += std::to_string(m.time) + (m.chapter ? "[chapter]" : "[user]") + m.label + " ";
+        result += std::to_string(m.time) + (m.chapter ? "[chapter]" : "[user]") + m.label + (m.note.empty() ? std::string() : "{" + m.note + "}") + " ";
     return result;
 }
 
@@ -813,6 +820,302 @@ static void testPositionThroughFind()
           "setting position through find() leaves the other saved fields alone, got " + (reloaded_b ? describeVideo(*reloaded_b) : std::string("missing")));
 }
 
+static Video notedVideo(const std::string& id)
+{
+    Video video = makeVideo(id, "Notes " + id);
+    video.marks = {
+        notedMark(0, "Intro", true, "Chapter note"),
+        notedMark(15, "empty", false, ""),
+        notedMark(30, "lines", false, "First line\nSecond line\r\nThird line"),
+        notedMark(45, "tabs", false, "col1\tcol2\t\t"),
+        notedMark(60, "quotes", false, "She said \"hi\" and 'bye'"),
+        notedMark(75, "slashes", false, "C:\\path\\to\\file and \\n literal"),
+        notedMark(90, "utf8", true, "Caf\xC3\xA9 \xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E \xF0\x9F\x98\x80"),
+        notedMark(105, "mixed", false, "\"\\\n\r\n\t\xC3\xBC \xF0\x9F\x8E\xB5"),
+    };
+    return video;
+}
+
+static int eraseNotes(nlohmann::json& video)
+{
+    int erased = 0;
+    for (nlohmann::json& value : video)
+        if (value.is_array())
+            for (nlohmann::json& entry : value)
+                if (entry.is_object() && entry.erase("note") > 0)
+                    ++erased;
+    return erased;
+}
+
+static nlohmann::json* findNote(nlohmann::json& videos, const std::string& note)
+{
+    for (nlohmann::json& video : videos)
+        if (video.is_object())
+            for (nlohmann::json& value : video)
+                if (value.is_array())
+                    for (nlohmann::json& entry : value)
+                        if (entry.is_object() && entry.contains("note") && entry["note"] == note)
+                            return &entry;
+    return nullptr;
+}
+
+static void checkNotes(const Video& got, const Video& expected, const std::string& name)
+{
+    check(got.marks.size() == expected.marks.size(), name + ": video " + expected.id + " keeps " + std::to_string(expected.marks.size())
+                                                         + " marks, got " + describe(got.marks));
+    for (size_t i = 0; i < got.marks.size() && i < expected.marks.size(); ++i)
+        check(got.marks[i].note == expected.marks[i].note, name + ": note at time " + std::to_string(expected.marks[i].time) + " of video " + expected.id
+                                                               + " is [" + expected.marks[i].note + "], got [" + got.marks[i].note + "]");
+    check(sameVideo(got, expected), name + ": video " + expected.id + " keeps every field, got " + describeVideo(got));
+}
+
+static void testNoteDefault()
+{
+    Bookmark bookmark;
+    check(bookmark.note.empty(), "a new Bookmark has an empty note, got [" + bookmark.note + "]");
+    Bookmark made = mark(10, "label", true);
+    check(made.note.empty(), "a bookmark without a set note has an empty note, got [" + made.note + "]");
+}
+
+static void testNoteRoundTrip()
+{
+    fs::path file = root / "note-roundtrip" / "library.json";
+    std::vector<Video> added = {notedVideo("n1"), notedVideo("n2"), makeVideo("plain", "Plain")};
+    added[1].marks[0].note = "Only in n2";
+    added[2].marks = {mark(5, "no note", false), mark(9, "no note chapter", true)};
+    Library library(file);
+    for (const Video& video : added)
+        library.add(video);
+    check(trySave(library, "note round trip"), "save() of bookmarks with notes returns true");
+    check(nlohmann::json::accept(readFile(file)), "saved library file with notes is valid JSON");
+
+    Library loaded(file);
+    check(tryLoad(loaded, "note round trip"), "load() of bookmarks with notes returns true");
+    check(loaded.videos().size() == added.size(), "load() restores every video with notes, got " + ids(loaded));
+    for (size_t i = 0; i < added.size() && i < loaded.videos().size(); ++i)
+        checkNotes(loaded.videos()[i], added[i], "note round trip");
+
+    check(trySave(loaded, "note resave"), "save() of a loaded library with notes returns true");
+    Library again(file);
+    check(tryLoad(again, "note reload"), "load() after saving a loaded library with notes returns true");
+    check(again.videos().size() == added.size(), "load, save, load keeps every video with notes, got " + ids(again));
+    for (size_t i = 0; i < added.size() && i < again.videos().size(); ++i)
+        checkNotes(again.videos()[i], added[i], "note load, save, load");
+}
+
+static void testNoteLong()
+{
+    fs::path file = root / "note-long" / "library.json";
+    std::string plain(10000, 'x');
+    std::string mixed;
+    for (int i = 0; i < 2000; ++i)
+        mixed += "Line " + std::to_string(i) + "\t\"q\" \\ caf\xC3\xA9 \xF0\x9F\x98\x80\r\n";
+    std::string single(20000, 'y');
+    single[0] = '"';
+    single[9999] = '\\';
+
+    Video video = makeVideo("long", "Long");
+    video.marks = {notedMark(1, "plain", false, plain), notedMark(2, "mixed", false, mixed), notedMark(3, "single", true, single)};
+    Library library(file);
+    library.add(video);
+    check(trySave(library, "long notes"), "save() of bookmarks with long notes returns true");
+
+    Library loaded(file);
+    check(tryLoad(loaded, "long notes"), "load() of bookmarks with long notes returns true");
+    Video* got = loaded.find("long");
+    check(got && got->marks.size() == 3, "video with long notes loads with 3 marks, got " + (got ? std::to_string(got->marks.size()) : std::string("missing")));
+    if (!got || got->marks.size() != 3)
+        return;
+    for (size_t i = 0; i < 3; ++i) {
+        const std::string& expected = video.marks[i].note;
+        const std::string& actual = got->marks[i].note;
+        check(actual == expected, "note \"" + video.marks[i].label + "\" of " + std::to_string(expected.size()) + " bytes round-trips exactly, got "
+                                      + std::to_string(actual.size()) + " bytes" + (actual.size() == expected.size() ? " with different content" : ""));
+    }
+    check(sameVideo(*got, video), "video with long notes keeps every field");
+}
+
+static void testNoteMissingKey()
+{
+    fs::path file = root / "note-missing" / "library.json";
+    Video first = notedVideo("first");
+    Video second = notedVideo("second");
+    nlohmann::json saved = savedJson(file, {first, second}, "missing note setup");
+    if (saved.is_null())
+        return;
+
+    Video old_first = first;
+    for (Bookmark& m : old_first.marks)
+        m.note = "";
+    Video old_second = second;
+    for (Bookmark& m : old_second.marks)
+        m.note = "";
+
+    nlohmann::json old_style = saved;
+    int erased = 0;
+    for (nlohmann::json& entry : old_style)
+        erased += eraseNotes(entry);
+    check(erased > 0, "saved file has \"note\" keys on its marks, found " + std::to_string(erased) + " in " + saved.dump());
+    loadExpects(file, old_style, {old_first, old_second}, "a file without \"note\" keys");
+
+    nlohmann::json one_video = saved;
+    eraseNotes(one_video[0]);
+    loadExpects(file, one_video, {old_first, second}, "a file where only one video's marks lack \"note\"");
+
+    nlohmann::json one_mark = saved;
+    nlohmann::json* entry = findNote(one_mark, first.marks[2].note);
+    check(entry != nullptr, "saved file contains the note [" + first.marks[2].note + "], got " + saved.dump());
+    if (!entry)
+        return;
+    entry->erase("note");
+    Video partial = first;
+    partial.marks[2].note = "";
+    loadExpects(file, one_mark, {partial, second}, "a file where only one mark lacks \"note\"");
+}
+
+static void testNoteWrongType()
+{
+    fs::path file = root / "note-type" / "library.json";
+    Video first = notedVideo("first");
+    first.marks[3].note = "Target note";
+    Video second = notedVideo("second");
+    nlohmann::json saved = savedJson(file, {first, second}, "wrong type note setup");
+    if (saved.is_null())
+        return;
+    nlohmann::json probe = saved;
+    bool has_target = findNote(probe, "Target note") != nullptr;
+    check(has_target, "saved file contains the note \"Target note\", got " + saved.dump());
+    if (!has_target)
+        return;
+
+    Video cleared = first;
+    cleared.marks[3].note = "";
+    std::vector<std::pair<std::string, nlohmann::json>> cases = {
+        {"a number note 42", nlohmann::json(42)},
+        {"a number note 0", nlohmann::json(0)},
+        {"a number note -7", nlohmann::json(-7)},
+        {"a number note 1.5", nlohmann::json(1.5)},
+        {"a null note", nlohmann::json(nullptr)},
+        {"a true note", nlohmann::json(true)},
+        {"a false note", nlohmann::json(false)},
+        {"an array note [\"Target note\"]", nlohmann::json::array({"Target note"})},
+        {"an empty array note", nlohmann::json::array()},
+        {"an object note", nlohmann::json::object({{"text", "Target note"}})},
+        {"an empty object note", nlohmann::json::object()},
+    };
+    for (const auto& [name, value] : cases) {
+        nlohmann::json edited = saved;
+        nlohmann::json* entry = findNote(edited, "Target note");
+        if (!entry)
+            continue;
+        (*entry)["note"] = value;
+        loadExpects(file, edited, {cleared, second}, name);
+    }
+}
+
+static void testNoteAddMark()
+{
+    Video video = makeVideo("v", "V");
+    Library::addMark(video, notedMark(30, "thirty", false, "note 30"));
+    Library::addMark(video, notedMark(10, "ten", false, "note 10\nsecond line"));
+    Library::addMark(video, notedMark(20, "twenty", false, ""));
+    Library::addMark(video, notedMark(0, "zero", false, "note \xF0\x9F\x98\x80 0"));
+    std::vector<Bookmark> expected = {
+        notedMark(0, "zero", false, "note \xF0\x9F\x98\x80 0"), notedMark(10, "ten", false, "note 10\nsecond line"),
+        notedMark(20, "twenty", false, ""), notedMark(30, "thirty", false, "note 30")};
+    check(sameMarks(video.marks, expected), "addMark() keeps each note with its own bookmark after sorting, got " + describe(video.marks));
+
+    Video single = makeVideo("s", "S");
+    Library::addMark(single, notedMark(42, "only", false, "kept \"note\"\r\n"));
+    check(single.marks.size() == 1 && single.marks[0].note == "kept \"note\"\r\n",
+          "addMark() keeps the note of the mark as given, got " + describe(single.marks));
+
+    Video many = makeVideo("m", "M");
+    for (int i = 0; i < 100; ++i) {
+        int time = (i * 7919) % 100;
+        Library::addMark(many, notedMark(time, "m" + std::to_string(time), false, "note " + std::to_string(time)));
+    }
+    std::string mismatch;
+    for (const Bookmark& m : many.marks)
+        if (mismatch.empty() && (m.note != "note " + std::to_string(m.time) || m.label != "m" + std::to_string(m.time)))
+            mismatch = std::to_string(m.time) + " has label " + m.label + " and note [" + m.note + "]";
+    check(many.marks.size() == 100 && sortedByTime(many.marks) && mismatch.empty(),
+          "100 marks with notes added in scrambled order keep their notes after sorting, size " + std::to_string(many.marks.size())
+              + (mismatch.empty() ? std::string() : ", mark at " + mismatch));
+}
+
+static void testNoteImportChapters()
+{
+    Video video = makeVideo("v", "V");
+    Library::addMark(video, notedMark(5, "mine early", false, "early note"));
+    Library::addMark(video, notedMark(45, "mine late", false, "late\r\nnote"));
+    Library::addMark(video, notedMark(70, "mine plain", false, ""));
+
+    Library::importChapters(video, {notedMark(60, "End", false, "end note"), notedMark(0, "Intro", false, "intro \xC3\xA9"), notedMark(30, "Middle", false, "")});
+    std::vector<Bookmark> expected = {
+        notedMark(0, "Intro", true, "intro \xC3\xA9"), notedMark(5, "mine early", false, "early note"), notedMark(30, "Middle", true, ""),
+        notedMark(45, "mine late", false, "late\r\nnote"), notedMark(60, "End", true, "end note"), notedMark(70, "mine plain", false, "")};
+    check(sameMarks(video.marks, expected), "importChapters() keeps user notes and the notes given on chapters, got " + describe(video.marks));
+
+    Library::importChapters(video, {notedMark(30, "Middle", true, "new middle note"), notedMark(10, "New", true, "")});
+    expected = {
+        notedMark(5, "mine early", false, "early note"), notedMark(10, "New", true, ""), notedMark(30, "Middle", true, "new middle note"),
+        notedMark(45, "mine late", false, "late\r\nnote"), notedMark(70, "mine plain", false, "")};
+    check(sameMarks(video.marks, expected), "importChapters() replaces chapters and their notes with the new chapters, got " + describe(video.marks));
+
+    Library::importChapters(video, {mark(30, "Middle", true)});
+    expected = {
+        notedMark(5, "mine early", false, "early note"), mark(30, "Middle", true),
+        notedMark(45, "mine late", false, "late\r\nnote"), notedMark(70, "mine plain", false, "")};
+    check(sameMarks(video.marks, expected), "a re-imported chapter without a note does not keep the old chapter note, got " + describe(video.marks));
+
+    Library::importChapters(video, {});
+    expected = {notedMark(5, "mine early", false, "early note"), notedMark(45, "mine late", false, "late\r\nnote"), notedMark(70, "mine plain", false, "")};
+    check(sameMarks(video.marks, expected), "importChapters() with no chapters keeps user marks with their notes, got " + describe(video.marks));
+}
+
+static void testNoteThroughFind()
+{
+    fs::path file = root / "note-find" / "library.json";
+    Video a = makeVideo("a", "A");
+    a.marks = {notedMark(0, "Intro", true, "intro"), notedMark(40, "old label", false, "old note"), notedMark(80, "keep", false, "keep note")};
+    Video b = notedVideo("b");
+    Library library(file);
+    library.add(a);
+    library.add(b);
+    trySave(library, "note find setup");
+
+    Library loaded(file);
+    tryLoad(loaded, "note find");
+    Video* found = loaded.find("a");
+    check(found != nullptr, "find(\"a\") returns the video after load()");
+    if (found) {
+        for (Bookmark& m : found->marks) {
+            if (m.time == 0)
+                m.note = "changed chapter note";
+            if (m.time == 40) {
+                m.label = "new label";
+                m.note = "new note\nline two";
+            }
+            if (m.time == 80)
+                m.note = "";
+        }
+    }
+    check(trySave(loaded, "note find save"), "save() after changing notes through find() returns true");
+
+    Video expected = a;
+    expected.marks[0].note = "changed chapter note";
+    expected.marks[1].label = "new label";
+    expected.marks[1].note = "new note\nline two";
+    expected.marks[2].note = "";
+    Library reloaded(file);
+    check(tryLoad(reloaded, "note find reload"), "load() after changing notes through find() returns true");
+    Video* got = reloaded.find("a");
+    check(got && sameVideo(*got, expected), "label and note changes made through find() are saved, got " + (got ? describeVideo(*got) : std::string("missing")));
+    Video* got_b = reloaded.find("b");
+    check(got_b && sameVideo(*got_b, b), "changing notes of a leaves the notes of b alone, got " + (got_b ? describeVideo(*got_b) : std::string("missing")));
+}
+
 int main()
 {
     root = fs::temp_directory_path() / ("youtonomous-library-test-" + std::to_string(GetCurrentProcessId()));
@@ -844,6 +1147,14 @@ int main()
     testPositionReplace();
     testPositionMarks();
     testPositionThroughFind();
+    testNoteDefault();
+    testNoteRoundTrip();
+    testNoteLong();
+    testNoteMissingKey();
+    testNoteWrongType();
+    testNoteAddMark();
+    testNoteImportChapters();
+    testNoteThroughFind();
 
     fs::remove_all(root, error);
     return report();

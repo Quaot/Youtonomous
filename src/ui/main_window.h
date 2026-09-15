@@ -46,6 +46,10 @@ private:
     void deleteSelectedMark();
     void jumpToSelectedMark();
     void jumpMark(int direction);
+    void showSelectedNote();
+    void startEditingMark();
+    void saveEditedMark();
+    void cancelEditingMark();
 
     void saveStartFromBox();
     void setStart(int seconds);
@@ -73,5 +77,6 @@ private:
     Library library_;
     std::unique_ptr<Player> player_;
     std::string current_id_;
+    int editing_mark_ = -1;
     bool downloading_ = false;
 };

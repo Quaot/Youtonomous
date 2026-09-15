@@ -20,8 +20,14 @@ public:
     std::string takeLabel();
     int selected(size_t count) const;
 
+    void showNote(const std::string& note);
+    void beginEdit(const std::string& label, const std::string& note);
+    void endEdit();
+    std::string noteText() const;
+
     bool isStartBox(HWND window) const { return window == start_edit_; }
     bool isLabelBox(HWND window) const { return window == label_edit_; }
+    bool isNoteBox(HWND window) const { return window == note_edit_; }
 
 private:
     HWND start_label_ = nullptr;
@@ -33,6 +39,8 @@ private:
     HWND marks_label_ = nullptr;
     HWND list_ = nullptr;
     HWND label_edit_ = nullptr;
+    HWND note_edit_ = nullptr;
     HWND add_button_ = nullptr;
+    HWND edit_button_ = nullptr;
     HWND delete_button_ = nullptr;
 };

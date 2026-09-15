@@ -8,6 +8,7 @@ struct Bookmark {
     int time = 0;
     std::string label;
     bool chapter = false;
+    std::string note;
 };
 
 struct Video {

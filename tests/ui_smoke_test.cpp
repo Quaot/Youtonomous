@@ -256,6 +256,42 @@ static std::string got(int value)
     return ", got " + std::to_string(value);
 }
 
+static int markIndex(HWND top, const std::wstring& text)
+{
+    std::vector<HWND> lists = children(top, L"ListBox");
+    if (lists.size() < 2)
+        return -1;
+    int count = static_cast<int>(SendMessageW(lists[1], LB_GETCOUNT, 0, 0));
+    for (int i = 0; i < count; ++i) {
+        wchar_t line[512] = L"";
+        if (SendMessageW(lists[1], LB_GETTEXTLEN, i, 0) >= 512)
+            continue;
+        SendMessageW(lists[1], LB_GETTEXT, i, reinterpret_cast<LPARAM>(line));
+        if (std::wstring(line).find(text) != std::wstring::npos)
+            return i;
+    }
+    return -1;
+}
+
+static void selectMark(HWND top, int index)
+{
+    std::vector<HWND> lists = children(top, L"ListBox");
+    if (lists.size() < 2)
+        return;
+    SendMessageW(lists[1], LB_SETCURSEL, index, 0);
+    WPARAM command = MAKEWPARAM(GetDlgCtrlID(lists[1]), LBN_SELCHANGE);
+    SendMessageW(top, WM_COMMAND, command, reinterpret_cast<LPARAM>(lists[1]));
+}
+
+static bool hasNote(const nlohmann::json& video, const std::string& label, const std::string& note)
+{
+    for (const nlohmann::json& mark : video.value("marks", nlohmann::json::array())) {
+        if (mark.value("label", "") == label && mark.value("note", "") == note)
+            return true;
+    }
+    return false;
+}
+
 static void clickSeekBar(HWND top, int numerator, int denominator)
 {
     std::vector<HWND> bars = children(top, L"YoutonomousSeekBar");
@@ -301,6 +337,22 @@ static void firstRun(const std::wstring& command_line, std::wstring& environment
         setText(edits[2], L"Smoke mark");
         click(top, L"Add");
         check(waitFor([&] { return hasMark(savedVideo(library_file), "Smoke mark"); }, 3000), "Add saves a labelled bookmark");
+
+        check(edits.size() >= 4, "a note box exists");
+        int smoke_index = markIndex(top, L"Smoke mark");
+        check(smoke_index >= 0, "the labelled bookmark is listed");
+        if (smoke_index >= 0 && edits.size() >= 4) {
+            selectMark(top, smoke_index);
+            click(top, L"Edit");
+            check(waitFor([&] { return button(top, L"Save") != nullptr; }, 3000), "Edit turns Add into Save");
+            setText(edits[2], L"Renamed mark");
+            setText(edits[3], L"line one\r\nline two");
+            click(top, L"Save");
+            check(waitFor([&] { return hasNote(savedVideo(library_file), "Renamed mark", "line one\nline two"); }, 3000),
+                  "Save renames the bookmark and stores its note");
+            check(waitFor([&] { return button(top, L"Add") != nullptr; }, 3000), "after saving the button reads Add again");
+            check(markIndex(top, L"Renamed mark") >= 0, "the list shows the new name");
+        }
 
         setText(edits[1], L"0:20");
         click(top, L"Set");
